@@ -217,7 +217,7 @@ const searchItemId = async (filename, logger = console) => {
   }
   
   // 使用正则表达式识别
-  const regexResult = recognizeByApi(filename)
+  const regexResult = recognizeByRegex(filename)
   searchType = regexResult.searchType
   searchTitle = regexResult.searchTitle
   season = regexResult.season
