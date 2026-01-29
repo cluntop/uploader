@@ -89,6 +89,7 @@ const showResave = ref(false)
 const fileUploadRef = ref(null)
 const currentFile = ref(null)
 const currentUploadType = ref('video')
+const currentIdMode = ref('manual') // manual 或 auto
 const uploadedFileInfo = ref(null) // 保存已上传文件的信息
 const uploadSummaryInfo = ref(null) // 保存上传完成后的汇总信息
 const isSaving = ref(false) // 是否正在保存上传结果
@@ -163,6 +164,7 @@ const handleLogout = () => {
   fileUploadRef.value?.resetFile()
   currentFile.value = null
   currentUploadType.value = 'video'
+  currentIdMode.value = 'manual'
 
   // 3. 清除上传进度和状态
   upload.uploadProgress.value = 0
@@ -215,7 +217,7 @@ const handleFetchVideoInfo = async () => {
 }
 
 // 文件选择后不再立即获取上传令牌
-const handleFileSelected = async (file, uploadType, errorMessage) => {
+const handleFileSelected = async (file, uploadType, errorMessage, idMode = 'manual') => {
   if (errorMessage) {
     notification.showStatus(errorMessage, 'error')
     return
@@ -225,9 +227,10 @@ const handleFileSelected = async (file, uploadType, errorMessage) => {
     return
   }
 
-  // 保存文件和上传类型
+  // 保存文件、上传类型和 ID 模式
   currentFile.value = file
   currentUploadType.value = uploadType
+  currentIdMode.value = idMode
 
   // 重置上传相关状态（重新选择文件时清除之前的错误状态）
   showReupload.value = false
@@ -240,26 +243,32 @@ const handleFileSelected = async (file, uploadType, errorMessage) => {
     return
   }
 
-  // 验证视频 ID
-  const videoId = video.videoId.value.trim()
-  if (!videoId) {
-    notification.showStatus('请先输入视频 ID', 'error')
-    fileUploadRef.value?.resetFile()
-    return
-  }
+  // 验证视频 ID（仅在手动模式下）
+  if (idMode === 'manual') {
+    const videoId = video.videoId.value.trim()
+    if (!videoId) {
+      notification.showStatus('请先输入视频 ID', 'error')
+      fileUploadRef.value?.resetFile()
+      return
+    }
 
-  if (!video.validateVideoId(videoId)) {
-    notification.showStatus('视频 ID 格式不正确，必须以 vl- 或 ve- 开头，后跟正整数', 'error')
-    fileUploadRef.value?.resetFile()
-    return
+    if (!video.validateVideoId(videoId)) {
+      notification.showStatus('视频 ID 格式不正确，必须以 vl- 或 ve- 开头，后跟正整数', 'error')
+      fileUploadRef.value?.resetFile()
+      return
+    }
   }
 
   // 不再自动获取 token，等待用户点击"开始上传"按钮
-  notification.showStatus('文件已选择，点击"开始上传"按钮开始上传', 'success')
+  let message = '文件已选择，点击"开始上传"按钮开始上传'
+  if (idMode === 'auto') {
+    message += '（将使用自动识别功能）'
+  }
+  notification.showStatus(message, 'success')
 }
 
 // 开始上传：先获取 token，成功后立即上传
-const handleStartUpload = async (file, uploadType) => {
+const handleStartUpload = async (file, uploadType, idMode = 'manual') => {
   if (!file) {
     notification.showStatus('请先选择文件', 'error')
     return
@@ -270,7 +279,42 @@ const handleStartUpload = async (file, uploadType) => {
   notification.hideStatus()
 
   try {
-    // 第一步：获取上传令牌
+    // 自动识别模式
+    if (idMode === 'auto') {
+      notification.showStatus('正在使用自动识别上传...', 'uploading')
+      
+      // 使用完整上传流程（包含识别）
+      const result = await upload.uploadWithRecognition(
+        file,
+        (msg, type) => {
+          notification.showStatus(msg, type)
+        }
+      )
+      
+      // 构建上传成功消息
+      let uploadSuccessMessage = '上传成功！'
+      if (result && result.count) {
+        uploadSuccessMessage += ` 这是您上传的第 ${result.count} 个资源`
+      }
+      if (result && result.radish) {
+        uploadSuccessMessage += `, 恭喜您获得 ${result.radish} 个胡萝卜！`
+      }
+      
+      notification.showStatus(uploadSuccessMessage, 'success')
+      
+      // 构建上传汇总信息
+      uploadSummaryInfo.value = {
+        fileName: file.name,
+        fileSize: file.size,
+        uploadTime: new Date().toISOString(),
+        totalCount: result?.count || 0,
+        radishReward: result?.radish || 0
+      }
+      
+      return
+    }
+
+    // 手动模式：先获取 token，成功后立即上传
     notification.showStatus('正在获取上传令牌...', 'uploading')
 
     await uploadToken.getUploadToken(

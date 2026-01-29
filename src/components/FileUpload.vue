@@ -35,6 +35,35 @@
       </div>
     </div>
     
+    <!-- 视频 ID 输入方式选择 -->
+    <div v-if="!isUploading && !isSaving && !uploadSummaryInfo && !showResave" class="mb-4">
+      <label class="block text-gray-800 font-medium mb-2 text-sm">视频 ID 输入方式</label>
+      <div class="flex gap-3">
+        <button
+          @click="idInputMode = 'manual'"
+          :class="[
+            'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300',
+            idInputMode === 'manual'
+              ? 'gradient-theme text-white shadow-md'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          ]"
+        >
+          🔢 手动输入
+        </button>
+        <button
+          @click="idInputMode = 'auto'"
+          :class="[
+            'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300',
+            idInputMode === 'auto'
+              ? 'gradient-theme text-white shadow-md'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          ]"
+        >
+          🤖 自动识别
+        </button>
+      </div>
+    </div>
+    
     <!-- 上传区域 -->
     <div
       v-if="!isUploading && !isSaving && !uploadSummaryInfo && !showResave"
@@ -184,6 +213,7 @@ const fileInputRef = ref(null)
 const selectedFile = ref(null)
 const isDragging = ref(false)
 const uploadType = ref('video')
+const idInputMode = ref('manual')
 
 // 获取上传类型标签
 const getUploadTypeLabel = () => {
@@ -292,18 +322,18 @@ const processFile = (file) => {
 
   selectedFile.value = file
   // 通知父组件文件已选择，需要获取上传令牌
-  emit('fileSelected', file, uploadType.value)
+  emit('fileSelected', file, uploadType.value, null, idInputMode.value)
 }
 
 const handleStartUpload = () => {
   if (selectedFile.value) {
     // 验证是否已获取视频信息
-    if (!props.videoInfo) {
+    if (!props.videoInfo && idInputMode.value === 'manual') {
       emit('fileSelected', null, null, '请先获取视频信息后再上传！')
       return
     }
 
-    emit('startUpload', selectedFile.value, uploadType.value)
+    emit('startUpload', selectedFile.value, uploadType.value, idInputMode.value)
   }
 }
 
