@@ -1,5 +1,5 @@
 import { ref, onMounted, computed } from 'vue'
-import { BASE_URL, LOGIN_URL, ERROR_CONFIG } from '../config'
+import { BASE_URL, ERROR_CONFIG } from '../config'
 import api from '../utils/api'
 
 export function useAuth() {
