@@ -21,15 +21,21 @@ services:
     environment:
       - NODE_ENV=production
       - VITE_API_BASE_URL=https://emos.clun.cc
+      # 确保日志输出正确
+      - NODE_OPTIONS=--trace-warnings
     # 可选：挂载环境变量文件
     # env_file:
     #   - .env.production
-    # 数据卷挂载
+    # 数据卷挂载（仅用于开发环境）
     volumes:
-      - ./src:/app/src
-      - ./dist:/app/dist
-      - ./*.json:/app
-      - ./*.js:/app
+      - ./:/app
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.Name}}/{{.ID}}"
 
 # 使用说明：
 # 1. 构建并运行服务：docker-compose up -d

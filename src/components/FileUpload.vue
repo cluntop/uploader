@@ -144,14 +144,37 @@
         ❌ 识别失败
       </div>
       <div class="text-red-600 text-sm mb-2">
-        {{ recognitionError }}
+        {{ typeof recognitionError === 'string' ? recognitionError : recognitionError.message || '识别失败，请重试' }}
       </div>
-      <button 
-        @click="retryRecognition"
-        class="text-sm text-red-700 hover:text-red-900"
-      >
-        🔄 重试
-      </button>
+      <div class="flex gap-2 mb-2">
+        <button 
+          @click="retryRecognition"
+          class="text-sm text-red-700 hover:text-red-900 px-3 py-1 bg-red-100 rounded hover:bg-red-200 transition-colors"
+        >
+          🔄 重试
+        </button>
+        <button 
+          @click="showErrorDetails = !showErrorDetails"
+          class="text-sm text-red-700 hover:text-red-900 px-3 py-1 bg-red-100 rounded hover:bg-red-200 transition-colors"
+        >
+          {{ showErrorDetails ? '收起详情' : '查看详情' }}
+        </button>
+      </div>
+      <div v-if="showErrorDetails" class="mt-2 p-3 bg-red-100 rounded-lg text-xs text-red-700 overflow-auto max-h-40">
+        <div v-if="typeof recognitionError === 'object' && recognitionError.steps" class="mb-2">
+          <div class="font-medium mb-1">识别步骤详情：</div>
+          <div v-for="(step, index) in recognitionError.steps" :key="index" class="mb-1">
+            <div class="font-medium">{{ step.name }}</div>
+            <div class="ml-2">{{ step.status }} - {{ step.message }}</div>
+          </div>
+        </div>
+        <div v-else-if="typeof recognitionError === 'object'" class="pre-wrap">
+          {{ JSON.stringify(recognitionError, null, 2) }}
+        </div>
+        <div v-else class="pre-wrap">
+          {{ recognitionError }}
+        </div>
+      </div>
     </div>
 
     <!-- 文件信息（上传和保存过程中都显示） -->
@@ -161,9 +184,52 @@
       </div>
       <div class="text-gray-600 text-sm mb-2">
         大小: {{ formatFileSize(selectedFile.size) }} | 类型: {{ getUploadTypeLabel() }}
+        <span v-if="idInputMode === 'auto'" class="ml-2">
+          <span v-if="recognitionResult" class="text-green-600 font-medium">
+            🎯 已识别: {{ recognitionResult.title }}
+            <span class="ml-1 text-xs bg-green-100 px-2 py-0.5 rounded-full text-green-700">
+              {{ getRecognitionTypeLabel() }}
+            </span>
+          </span>
+          <span v-else-if="recognitionError" class="text-red-600 font-medium">
+            ❌ 识别失败
+          </span>
+          <span v-else-if="isRecognizing" class="text-blue-600 font-medium">
+            🔍 识别中... {{ recognitionStep }}
+          </span>
+          <span v-else class="text-gray-500">
+            待识别
+          </span>
+        </span>
       </div>
       <div class="text-gray-600 text-sm" v-if="videoId">
         视频ID: {{ videoId }}
+      </div>
+      <div class="text-gray-600 text-sm" v-if="recognitionResult && recognitionResult.video_id">
+        识别到的视频ID: {{ recognitionResult.video_id }}
+      </div>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button 
+          v-if="idInputMode === 'auto'" 
+          @click="retryRecognition"
+          class="text-xs px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors flex items-center gap-1"
+        >
+          🔄 重新识别
+        </button>
+        <button 
+          v-if="recognitionError" 
+          @click="showErrorDetails = !showErrorDetails"
+          class="text-xs px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors flex items-center gap-1"
+        >
+          📋 {{ showErrorDetails ? '收起详情' : '查看详情' }}
+        </button>
+        <button 
+          v-if="recognitionResult" 
+          @click="resetRecognition"
+          class="text-xs px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors flex items-center gap-1"
+        >
+          🔄 重新选择
+        </button>
       </div>
     </div>
 
@@ -282,6 +348,7 @@ const recognitionProgress = ref(0)
 const recognitionStep = ref('')
 const recognitionResult = ref(null)
 const recognitionError = ref(null)
+const showErrorDetails = ref(false)
 
 // 获取上传类型标签
 const getUploadTypeLabel = () => {
