@@ -433,12 +433,57 @@ const searchItemId = async (filename, logger = console) => {
   try {
     const searchResults = await searchVideoId(searchTitle, logger)
     if (searchResults.length > 0) {
-      const first = searchResults[0]
-      logger.log(`首个结果: ${first.video_title} (${first.video_type})`)
-      steps.push({ name: '视频搜索', status: '成功', message: `找到 ${searchResults.length} 个结果，使用第一个: ${first.video_title}` })
+      // 优先选择有 tmdb_id 的结果
+      const tmdbResult = searchResults.find(item => item.tmdb_id)
+      const first = tmdbResult || searchResults[0]
+      
+      logger.log(`首选结果: ${first.video_title} (${first.video_type})${first.tmdb_id ? ` TMDB: ${first.tmdb_id}` : ''}`)
+      steps.push({ name: '视频搜索', status: '成功', message: `找到 ${searchResults.length} 个结果，使用 ${first.tmdb_id ? 'TMDB 匹配' : '首个'}结果: ${first.video_title}` })
       
       const targetTmdb = first.tmdb_id
       const targetTodb = first.todb_id
+      
+      // 如果有 tmdb_id，优先使用 tmdb_id 进行定位
+      if (targetTmdb) {
+        steps.push({ name: 'TMDB 定位', status: '开始', message: `使用 TMDB ID ${targetTmdb} 定位视频` })
+        try {
+          const tmdbParams = {
+            video_id_type: 'tmdb',
+            video_id_value: targetTmdb,
+            season_number: searchType === 'tv' ? season : undefined,
+            episode_number: searchType === 'tv' ? episode : undefined
+          }
+          
+          const tmdbResult = await getVideoId(tmdbParams, logger)
+          
+          if (searchType === 'tv') {
+            if (tmdbResult.episode_info && tmdbResult.episode_info.item_id) {
+              steps.push({ name: 'TMDB 定位', status: '成功', message: `找到剧集: ${tmdbResult.video_title} S${season}E${episode}` })
+              return {
+                video_id: tmdbResult.episode_info.item_id,
+                item_type: 've',
+                title: `${tmdbResult.video_title} S${season}E${episode}`,
+                media_uuid: null
+              }
+            }
+            steps.push({ name: 'TMDB 定位', status: '失败', message: `未找到剧集 S${season}E${episode}` })
+          } else {
+            if (tmdbResult.item_id) {
+              steps.push({ name: 'TMDB 定位', status: '成功', message: `找到电影: ${tmdbResult.video_title}` })
+              return {
+                video_id: tmdbResult.item_id,
+                item_type: 'vl',
+                title: tmdbResult.video_title,
+                media_uuid: null
+              }
+            }
+            steps.push({ name: 'TMDB 定位', status: '失败', message: '未找到对应的视频' })
+          }
+        } catch (e) {
+          logger.error('TMDB 定位失败:', e)
+          steps.push({ name: 'TMDB 定位', status: '失败', message: `TMDB 定位失败: ${e.message}` })
+        }
+      }
       
       if (searchType === 'tv' && first.video_type === 'tv') {
         if (targetTmdb || targetTodb) {
