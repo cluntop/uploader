@@ -40,7 +40,7 @@
       <label class="block text-gray-800 font-medium mb-2 text-sm">视频 ID 输入方式</label>
       <div class="flex gap-3">
         <button
-          @click="idInputMode = 'manual'"
+          @click="uploadType = 'video'; idInputMode = 'manual'"
           :class="[
             'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300',
             idInputMode === 'manual'
@@ -51,7 +51,7 @@
           🔢 手动输入
         </button>
         <button
-          @click="idInputMode = 'auto'"
+          @click="uploadType = 'video'; idInputMode = 'auto'"
           :class="[
             'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300',
             idInputMode === 'auto'
@@ -77,12 +77,29 @@
       @dragleave="handleDragLeave"
       @drop.prevent="handleDrop"
     >
-      <div class="text-5xl mb-2.5">📁</div>
-      <div class="text-teal-600 font-medium mb-1">
-        点击或拖拽文件到此处选择
+      <div v-if="isRecognizing" class="recognition-progress">
+        <div class="text-3xl mb-2">🔍</div>
+        <div class="text-teal-600 font-medium mb-1">
+          正在识别文件...
+        </div>
+        <div class="text-gray-500 text-xs mb-2">
+          {{ recognitionStep }}
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-2.5">
+          <div 
+            class="bg-teal-600 h-2.5 rounded-full transition-all duration-300" 
+            :style="{ width: recognitionProgress + '%' }"
+          ></div>
+        </div>
       </div>
-      <div class="text-gray-500 text-xs">
-        {{ getAcceptHint() }}
+      <div v-else class="upload-area">
+        <div class="text-5xl mb-2.5">📁</div>
+        <div class="text-teal-600 font-medium mb-1">
+          点击或拖拽文件到此处选择
+        </div>
+        <div class="text-gray-500 text-xs">
+          {{ getAcceptHint() }}
+        </div>
       </div>
     </div>
 
@@ -93,6 +110,49 @@
       class="hidden"
       @change="handleFileChange"
     />
+
+    <!-- 识别结果 -->
+    <div v-if="recognitionResult && !uploadSummaryInfo" class="recognition-result mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+      <div class="flex justify-between items-start">
+        <div>
+          <div class="font-medium text-green-800 mb-1">
+            🎯 识别成功
+          </div>
+          <div class="text-green-600 text-sm">
+            视频标题: {{ recognitionResult.title }}
+          </div>
+          <div class="text-green-600 text-sm">
+            视频 ID: {{ recognitionResult.video_id }}
+          </div>
+          <div class="text-green-600 text-sm">
+            类型: {{ getRecognitionTypeLabel() }}
+          </div>
+        </div>
+        <button 
+          v-if="recognitionResult" 
+          @click="resetRecognition"
+          class="text-sm text-gray-500 hover:text-gray-700"
+        >
+          🔄 重新识别
+        </button>
+      </div>
+    </div>
+
+    <!-- 识别错误 -->
+    <div v-if="recognitionError && !uploadSummaryInfo" class="recognition-error mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+      <div class="font-medium text-red-800 mb-1">
+        ❌ 识别失败
+      </div>
+      <div class="text-red-600 text-sm mb-2">
+        {{ recognitionError }}
+      </div>
+      <button 
+        @click="retryRecognition"
+        class="text-sm text-red-700 hover:text-red-900"
+      >
+        🔄 重试
+      </button>
+    </div>
 
     <!-- 文件信息（上传和保存过程中都显示） -->
     <div v-if="selectedFile && !uploadSummaryInfo" class="file-info mt-5 p-4 bg-gray-100 rounded-lg">
@@ -129,7 +189,7 @@
 
     <!-- 上传按钮 -->
     <button
-      v-if="selectedFile && !isUploading && uploadProgress === 0 && !uploadSummaryInfo && !showReupload"
+      v-if="selectedFile && !isUploading && uploadProgress === 0 && !uploadSummaryInfo && !showReupload && !isRecognizing && (idInputMode === 'manual' || recognitionResult)"
       @click="handleStartUpload"
       class="mt-4 w-full px-6 py-3 gradient-theme text-white rounded-lg text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
     >
@@ -159,6 +219,7 @@
 <script setup>
 import { ref } from 'vue'
 import UploadSummary from './UploadSummary.vue'
+import { searchItemId } from '../utils/recognize'
 
 const props = defineProps({
   videoId: {
@@ -207,13 +268,20 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['fileSelected', 'startUpload', 'reupload', 'resave', 'continue-upload'])
+const emit = defineEmits(['fileSelected', 'startUpload', 'reupload', 'resave', 'continue-upload', 'recognitionComplete'])
 
 const fileInputRef = ref(null)
 const selectedFile = ref(null)
 const isDragging = ref(false)
 const uploadType = ref('video')
 const idInputMode = ref('manual')
+
+// 识别相关状态
+const isRecognizing = ref(false)
+const recognitionProgress = ref(0)
+const recognitionStep = ref('')
+const recognitionResult = ref(null)
+const recognitionError = ref(null)
 
 // 获取上传类型标签
 const getUploadTypeLabel = () => {
@@ -243,6 +311,17 @@ const getAcceptHint = () => {
     cover: '支持图片文件 (JPG, PNG, WEBP 等)'
   }
   return hints[uploadType.value] || '请选择文件'
+}
+
+// 获取识别类型标签
+const getRecognitionTypeLabel = () => {
+  if (!recognitionResult.value) return '未知'
+  const labels = {
+    'vl': '电影',
+    've': '电视剧',
+    'tv': '电视剧'
+  }
+  return labels[recognitionResult.value.item_type] || recognitionResult.value.item_type || '未知'
 }
 
 // 验证文件类型
@@ -278,8 +357,76 @@ const isValidFile = (file) => {
   return false
 }
 
+// 执行文件识别
+const recognizeFile = async (file) => {
+  isRecognizing.value = true
+  recognitionProgress.value = 0
+  recognitionStep.value = '分析文件名...'
+  recognitionError.value = null
+
+  try {
+    // 模拟识别进度
+    let progress = 0
+    const progressInterval = setInterval(() => {
+      progress += 5
+      recognitionProgress.value = progress
+      if (progress >= 90) {
+        clearInterval(progressInterval)
+      }
+    }, 200)
+
+    // 执行识别
+    recognitionStep.value = '调用识别 API...'
+    const result = await searchItemId(file.name, {
+      log: (message) => {
+        console.log(message)
+        if (message.includes('API 识别成功')) {
+          recognitionStep.value = 'API 识别成功，处理结果...'
+        } else if (message.includes('正则')) {
+          recognitionStep.value = '使用正则表达式识别...'
+        } else if (message.includes('搜索')) {
+          recognitionStep.value = '搜索视频信息...'
+        } else if (message.includes('精准定位')) {
+          recognitionStep.value = '精准定位视频...'
+        }
+      }
+    })
+
+    clearInterval(progressInterval)
+    recognitionProgress.value = 100
+    recognitionStep.value = '识别完成'
+
+    recognitionResult.value = result
+    emit('recognitionComplete', result)
+
+    return result
+  } catch (error) {
+    console.error('识别失败:', error)
+    recognitionError.value = error.message || '识别失败，请重试'
+    return null
+  } finally {
+    isRecognizing.value = false
+    recognitionProgress.value = 100
+  }
+}
+
+// 重置识别状态
+const resetRecognition = () => {
+  recognitionResult.value = null
+  recognitionError.value = null
+  selectedFile.value = null
+  emit('fileSelected', null, uploadType.value, null, idInputMode.value)
+}
+
+// 重试识别
+const retryRecognition = async () => {
+  if (selectedFile.value) {
+    await recognizeFile(selectedFile.value)
+  }
+}
+
 const handleClick = () => {
-  if (!props.isUploading) {
+  if (!props.isUploading && !isRecognizing.value) {
     fileInputRef.value?.click()
   }
 }
@@ -294,7 +441,7 @@ const handleFileChange = (event) => {
 }
 
 const handleDragOver = () => {
-  if (!props.isUploading) {
+  if (!props.isUploading && !isRecognizing.value) {
     isDragging.value = true
   }
 }
@@ -305,7 +452,7 @@ const handleDragLeave = () => {
 
 const handleDrop = (event) => {
   isDragging.value = false
-  if (props.isUploading) return
+  if (props.isUploading || isRecognizing.value) return
 
   const file = event.dataTransfer.files[0]
   if (file) {
@@ -313,7 +460,7 @@ const handleDrop = (event) => {
   }
 }
 
-const processFile = (file) => {
+const processFile = async (file) => {
   if (!isValidFile(file)) {
     const typeLabel = getUploadTypeLabel()
     emit('fileSelected', null, null, `错误：只能上传${typeLabel}文件！`)
@@ -321,8 +468,15 @@ const processFile = (file) => {
   }
 
   selectedFile.value = file
-  // 通知父组件文件已选择，需要获取上传令牌
-  emit('fileSelected', file, uploadType.value, null, idInputMode.value)
+
+  // 自动识别模式下，立即开始识别
+  if (idInputMode.value === 'auto') {
+    emit('fileSelected', file, uploadType.value, null, idInputMode.value)
+    await recognizeFile(file)
+  } else {
+    // 手动模式下，直接通知父组件
+    emit('fileSelected', file, uploadType.value, null, idInputMode.value)
+  }
 }
 
 const handleStartUpload = () => {
@@ -333,7 +487,7 @@ const handleStartUpload = () => {
       return
     }
 
-    emit('startUpload', selectedFile.value, uploadType.value, idInputMode.value)
+    emit('startUpload', selectedFile.value, uploadType.value, idInputMode.value, recognitionResult.value)
   }
 }
 
@@ -350,11 +504,14 @@ const handleResave = () => {
 // 重置文件选择
 const resetFile = () => {
   selectedFile.value = null
+  recognitionResult.value = null
+  recognitionError.value = null
 }
 
 defineExpose({
   selectedFile,
   uploadType,
+  idInputMode,
   resetFile
 })
 </script>

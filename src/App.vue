@@ -42,25 +42,26 @@
       </div>
 
       <!-- 文件上传区域 -->
-      <FileUpload
-        ref="fileUploadRef"
-        :video-id="video.videoId.value"
-        :video-info="video.videoInfo.value"
-        :upload-progress="upload.uploadProgress.value"
-        :upload-speed="upload.uploadSpeed.value"
-        :is-uploading="upload.isUploading.value"
-        :is-saving="isSaving"
-        :show-reupload="showReupload"
-        :show-resave="showResave"
-        :upload-token="uploadToken.uploadToken.value"
-        :upload-summary-info="uploadSummaryInfo"
-        :format-file-size="upload.formatFileSize"
-        @file-selected="handleFileSelected"
-        @start-upload="handleStartUpload"
-        @reupload="handleReupload"
-        @resave="handleResave"
-        @continue-upload="handleContinueUpload"
-      />
+    <FileUpload
+      ref="fileUploadRef"
+      :video-id="video.videoId.value"
+      :video-info="video.videoInfo.value"
+      :upload-progress="upload.uploadProgress.value"
+      :upload-speed="upload.uploadSpeed.value"
+      :is-uploading="upload.isUploading.value"
+      :is-saving="isSaving"
+      :show-reupload="showReupload"
+      :show-resave="showResave"
+      :upload-token="uploadToken.uploadToken.value"
+      :upload-summary-info="uploadSummaryInfo"
+      :format-file-size="upload.formatFileSize"
+      @file-selected="handleFileSelected"
+      @start-upload="handleStartUpload"
+      @reupload="handleReupload"
+      @resave="handleResave"
+      @continue-upload="handleContinueUpload"
+      @recognition-complete="handleRecognitionComplete"
+    />
     </div>
   </div>
 </template>
@@ -90,9 +91,17 @@ const fileUploadRef = ref(null)
 const currentFile = ref(null)
 const currentUploadType = ref('video')
 const currentIdMode = ref('manual') // manual 或 auto
+const currentRecognitionResult = ref(null) // 保存识别结果
 const uploadedFileInfo = ref(null) // 保存已上传文件的信息
 const uploadSummaryInfo = ref(null) // 保存上传完成后的汇总信息
 const isSaving = ref(false) // 是否正在保存上传结果
+
+// 处理识别完成事件
+const handleRecognitionComplete = (result) => {
+  currentRecognitionResult.value = result
+  console.log('识别完成:', result)
+  notification.showStatus(`识别成功: ${result.title}`, 'success')
+}
 
 // 检查上传 token 是否过期
 const isTokenExpired = (uploadUrl) => {
@@ -165,6 +174,7 @@ const handleLogout = () => {
   currentFile.value = null
   currentUploadType.value = 'video'
   currentIdMode.value = 'manual'
+  currentRecognitionResult.value = null
 
   // 3. 清除上传进度和状态
   upload.uploadProgress.value = 0
@@ -231,6 +241,7 @@ const handleFileSelected = async (file, uploadType, errorMessage, idMode = 'manu
   currentFile.value = file
   currentUploadType.value = uploadType
   currentIdMode.value = idMode
+  currentRecognitionResult.value = null
 
   // 重置上传相关状态（重新选择文件时清除之前的错误状态）
   showReupload.value = false
@@ -268,7 +279,7 @@ const handleFileSelected = async (file, uploadType, errorMessage, idMode = 'manu
 }
 
 // 开始上传：先获取 token，成功后立即上传
-const handleStartUpload = async (file, uploadType, idMode = 'manual') => {
+const handleStartUpload = async (file, uploadType, idMode = 'manual', recognitionResult = null) => {
   if (!file) {
     notification.showStatus('请先选择文件', 'error')
     return
@@ -281,10 +292,15 @@ const handleStartUpload = async (file, uploadType, idMode = 'manual') => {
   try {
     // 自动识别模式
     if (idMode === 'auto') {
+      const result = recognitionResult || currentRecognitionResult.value
+      if (!result) {
+        throw new Error('识别结果不存在，请重新选择文件')
+      }
+
       notification.showStatus('正在使用自动识别上传...', 'uploading')
       
       // 使用完整上传流程（包含识别）
-      const result = await upload.uploadWithRecognition(
+      const uploadResult = await upload.uploadWithRecognition(
         file,
         (msg, type) => {
           notification.showStatus(msg, type)
@@ -293,11 +309,11 @@ const handleStartUpload = async (file, uploadType, idMode = 'manual') => {
       
       // 构建上传成功消息
       let uploadSuccessMessage = '上传成功！'
-      if (result && result.count) {
-        uploadSuccessMessage += ` 这是您上传的第 ${result.count} 个资源`
+      if (uploadResult && uploadResult.count) {
+        uploadSuccessMessage += ` 这是您上传的第 ${uploadResult.count} 个资源`
       }
-      if (result && result.radish) {
-        uploadSuccessMessage += `, 恭喜您获得 ${result.radish} 个胡萝卜！`
+      if (uploadResult && uploadResult.radish) {
+        uploadSuccessMessage += `, 恭喜您获得 ${uploadResult.radish} 个胡萝卜！`
       }
       
       notification.showStatus(uploadSuccessMessage, 'success')
@@ -307,8 +323,8 @@ const handleStartUpload = async (file, uploadType, idMode = 'manual') => {
         fileName: file.name,
         fileSize: file.size,
         uploadTime: new Date().toISOString(),
-        totalCount: result?.count || 0,
-        radishReward: result?.radish || 0
+        totalCount: uploadResult?.count || 0,
+        radishReward: uploadResult?.radish || 0
       }
       
       return
