@@ -11,16 +11,16 @@ services:
     # 工作目录
     working_dir: /app
     # 容器名称
-    container_name: emos
+    container_name: emos2
     # 端口映射
     ports:
-      - "127.0.0.1:8000:3000"
+      - "127.0.0.1:8032:3000"
     # 重启策略
     restart: unless-stopped
     # 环境变量
     environment:
       - NODE_ENV=production
-      - VITE_API_BASE_URL=https://your-api-endpoint.com
+      - VITE_API_BASE_URL=https://emos.clun.cc
     # 可选：挂载环境变量文件
     # env_file:
     #   - .env.production
@@ -28,7 +28,8 @@ services:
     volumes:
       - ./src:/app/src
       - ./dist:/app/dist
-      - ./.env.production:/app/.env.production
+      - ./*.json:/app
+      - ./*.js:/app
 
 # 使用说明：
 # 1. 构建并运行服务：docker-compose up -d

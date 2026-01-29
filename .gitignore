@@ -5,3 +5,5 @@ pnpm-lock.yaml
 
 # 本地环境变量
 .env.local
+
+.trae
