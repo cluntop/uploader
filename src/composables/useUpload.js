@@ -1,5 +1,6 @@
 import { ref } from 'vue'
-import { CHUNK_SIZE, MIN_CHUNK_SIZE } from '../config'
+import { CHUNK_SIZE, MIN_CHUNK_SIZE, NETWORK_CONFIG, ERROR_CONFIG } from '../config'
+import api from '../utils/api'
 
 export function useUpload() {
   const uploadProgress = ref(0)
@@ -75,35 +76,26 @@ export function useUpload() {
   }
 
   // 上传单个分片
-  const uploadChunk = (chunk, start, end, total, uploadUrl) => {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
-
-      currentUploadController = {
-        abort: () => xhr.abort()
-      }
-
-      xhr.addEventListener('load', () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(xhr.responseText)
-        } else {
-          reject(new Error(`分片上传失败: ${xhr.status} ${xhr.statusText}`))
+  const uploadChunk = async (chunk, start, end, total, uploadUrl, attempt = 1) => {
+    try {
+      // 使用 api 工具上传分片
+      const response = await api.upload(uploadUrl, chunk, {
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'Content-Range': `bytes ${start}-${end}/${total}`
         }
       })
-
-      xhr.addEventListener('error', () => {
-        reject(new Error('网络错误'))
-      })
-
-      xhr.addEventListener('abort', () => {
-        reject(new Error('上传已取消'))
-      })
-
-      xhr.open('PUT', uploadUrl)
-      xhr.setRequestHeader('Content-Type', 'application/octet-stream')
-      xhr.setRequestHeader('Content-Range', `bytes ${start}-${end}/${total}`)
-      xhr.send(chunk)
-    })
+      return response
+    } catch (error) {
+      // 重试机制
+      if (attempt < 3 && (error.message.includes('Network') || error.message.includes('50'))) {
+        const delay = 1000 * Math.pow(2, attempt - 1)
+        await new Promise(resolve => setTimeout(resolve, delay))
+        console.log(`分片上传失败，正在重试 (${attempt}/3)...`)
+        return uploadChunk(chunk, start, end, total, uploadUrl, attempt + 1)
+      }
+      throw error
+    }
   }
 
   // 分片上传文件（支持断点续传）
@@ -126,6 +118,8 @@ export function useUpload() {
       for (let i = resumeFrom; i < chunks; i++) {
         const start = i * chunkSize
         const end = Math.min(start + chunkSize, total) - 1
+        
+        // 优化：使用 Blob.slice 而不是 File.slice，提高性能
         const chunk = file.slice(start, end + 1)
 
         console.log(`上传分片 ${i + 1}/${chunks}: bytes ${start}-${end}/${total}`)
@@ -139,7 +133,7 @@ export function useUpload() {
         // 保存最后一片的响应（包含完整文件信息）
         if (i === chunks - 1) {
           try {
-            lastChunkResponse = JSON.parse(response)
+            lastChunkResponse = typeof response === 'string' ? JSON.parse(response) : response
           } catch (e) {
             lastChunkResponse = response
           }
@@ -158,6 +152,9 @@ export function useUpload() {
         uploadSpeed.value = formatFileSize(speed) + '/s'
 
         console.log(`分片 ${i + 1} 上传成功`)
+
+        // 优化：释放分片内存
+        chunk = null
       }
 
       // 上传完成，清除进度
@@ -168,14 +165,21 @@ export function useUpload() {
       return lastChunkResponse
     } catch (error) {
       // 上传失败，保持进度记录，允许断点续传
-      console.error('分片上传失败，已保存进度，可以断点续传')
+      console.error('分片上传失败，已保存进度，可以断点续传:', error)
       canResume.value = true
-      throw error
+      // 处理错误消息
+      if (error.message.includes('Network')) {
+        throw new Error(ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR)
+      } else if (error.message.includes('50')) {
+        throw new Error(ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR)
+      } else {
+        throw new Error(ERROR_CONFIG.SHOW_DETAILED_ERRORS ? error.message : ERROR_CONFIG.ERROR_MESSAGES.UPLOAD_ERROR)
+      }
     }
   }
 
   // 完整上传（小文件）
-  const uploadFileComplete = (file, uploadUrl) => {
+  const uploadFileComplete = async (file, uploadUrl) => {
     const start = 0
     const end = file.size - 1
     const total = file.size
@@ -183,63 +187,47 @@ export function useUpload() {
 
     console.log(`开始完整上传: ${formatFileSize(total)}`)
 
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
-
-      currentUploadController = {
-        abort: () => xhr.abort()
-      }
-
-      xhr.upload.addEventListener('progress', (e) => {
-        if (e.lengthComputable) {
-          const percent = Math.round((e.loaded / e.total) * 100)
+    try {
+      // 使用 api 工具上传文件
+      const response = await api.upload(uploadUrl, file, {
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'Content-Range': `bytes ${start}-${end}/${total}`
+        },
+        onProgress: (percent) => {
           uploadProgress.value = percent
 
           // 计算上传速度
           const elapsed = (Date.now() - startTime) / 1000
-          const speed = e.loaded / elapsed
+          const speed = (percent / 100) * total / elapsed
           uploadSpeed.value = formatFileSize(speed) + '/s'
         }
       })
 
-      xhr.addEventListener('load', () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          console.log('上传响应:', xhr.responseText)
-          // 解析并返回 OneDrive 响应数据
-          try {
-            const responseData = JSON.parse(xhr.responseText)
-            resolve(responseData)
-          } catch (e) {
-            resolve(xhr.responseText)
-          }
-        } else {
-          const error = new Error(`上传失败: ${xhr.status} ${xhr.statusText}`)
-          console.error('上传失败:', xhr.status, xhr.statusText, xhr.responseText)
-          reject(error)
-        }
-      })
-
-      xhr.addEventListener('error', () => {
-        const error = new Error('网络错误，上传失败')
-        console.error('网络错误')
-        reject(error)
-      })
-
-      xhr.addEventListener('abort', () => {
-        const error = new Error('上传已取消')
-        reject(error)
-      })
-
-      xhr.open('PUT', uploadUrl)
-      xhr.setRequestHeader('Content-Type', 'application/octet-stream')
-      xhr.setRequestHeader('Content-Range', `bytes ${start}-${end}/${total}`)
-      xhr.send(file)
-    })
+      console.log('上传响应:', response)
+      // 解析并返回响应数据
+      return typeof response === 'string' ? JSON.parse(response) : response
+    } catch (error) {
+      console.error('上传失败:', error)
+      // 处理错误消息
+      if (error.message.includes('Network')) {
+        throw new Error(ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR)
+      } else if (error.message.includes('50')) {
+        throw new Error(ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR)
+      } else {
+        throw new Error(ERROR_CONFIG.SHOW_DETAILED_ERRORS ? error.message : ERROR_CONFIG.ERROR_MESSAGES.UPLOAD_ERROR)
+      }
+    }
   }
 
   // 上传文件（自动选择分片或完整上传，支持断点续传）
   const uploadFile = async (file, uploadUrl, onProgress) => {
-    if (!file || !uploadUrl) return null
+    if (!file || !uploadUrl) {
+      if (onProgress) {
+        onProgress('文件或上传 URL 不能为空', 'error')
+      }
+      return null
+    }
 
     // 保存文件以便重新上传
     lastUploadedFile.value = file

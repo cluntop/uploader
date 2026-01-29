@@ -1,5 +1,6 @@
 import { ref } from 'vue'
-import { BASE_URL } from '../config'
+import { API_ENDPOINTS, ERROR_CONFIG } from '../config'
+import api from '../utils/api'
 
 export function useVideoInfo() {
   const videoId = ref('')
@@ -51,32 +52,30 @@ export function useVideoInfo() {
       const item_type = match[1]
       const item_id = match[2]
 
-      const apiUrl = `${BASE_URL}/api/upload/video/base?item_type=${item_type}&item_id=${item_id}`
+      // 构建查询参数
+      const params = new URLSearchParams({
+        item_type,
+        item_id
+      }).toString()
 
-      // 从 sessionStorage 获取 token
-      const token = sessionStorage.getItem('token')
-      if (!token) {
-        throw new Error('未找到认证令牌，请重新登录')
-      }
-
-      const response = await fetch(apiUrl, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-
-      const data = await response.json()
+      // 使用 api 工具获取视频信息
+      const data = await api.get(`${API_ENDPOINTS.VIDEO_INFO}?${params}`)
       videoInfo.value = data
 
       console.log('视频信息:', data)
       return true
     } catch (err) {
-      error.value = err.message
       console.error('获取视频信息失败:', err)
+      // 处理错误消息
+      if (err.message.includes('401')) {
+        error.value = ERROR_CONFIG.ERROR_MESSAGES.AUTH_ERROR
+      } else if (err.message.includes('Network')) {
+        error.value = ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR
+      } else if (err.message.includes('50')) {
+        error.value = ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR
+      } else {
+        error.value = ERROR_CONFIG.SHOW_DETAILED_ERRORS ? err.message : ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR
+      }
       return false
     } finally {
       isLoading.value = false
@@ -97,6 +96,15 @@ export function useVideoInfo() {
     }
   }
 
+  // 清除视频信息
+  const clearVideoInfo = () => {
+    videoId.value = ''
+    videoInfo.value = null
+    isValid.value = false
+    error.value = null
+    fileStorage.value = 'default'
+  }
+
   return {
     videoId,
     videoInfo,
@@ -107,6 +115,7 @@ export function useVideoInfo() {
     validateVideoId,
     fetchVideoInfo,
     updateValidation,
-    formatFileSize
+    formatFileSize,
+    clearVideoInfo
   }
 }

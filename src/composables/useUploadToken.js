@@ -1,5 +1,6 @@
 import { ref } from 'vue'
-import { BASE_URL } from '../config'
+import { API_ENDPOINTS, ERROR_CONFIG } from '../config'
+import api from '../utils/api'
 
 export function useUploadToken() {
   const uploadToken = ref(null)
@@ -12,34 +13,17 @@ export function useUploadToken() {
     tokenError.value = null
 
     try {
-      const apiUrl = `${BASE_URL}/api/upload/getUploadToken`
-
-      // 从 sessionStorage 获取 token
-      const token = sessionStorage.getItem('token')
-      if (!token) {
-        throw new Error('未找到认证令牌，请重新登录')
+      // 准备请求数据
+      const requestData = {
+        type: type,           // video/subtitle/cover
+        file_type: fileType,  // MIME type
+        file_name: fileName,  // name with extension
+        file_size: fileSize,  // file size in bytes
+        file_storage: fileStorage // default/global/internal
       }
 
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          type: type,           // video/subtitle/cover
-          file_type: fileType,  // MIME type
-          file_name: fileName,  // name with extension
-          file_size: fileSize,  // file size in bytes
-          file_storage: fileStorage // default/global/internal
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-
-      const data = await response.json()
+      // 使用 api 工具获取上传令牌
+      const data = await api.post(API_ENDPOINTS.UPLOAD_TOKEN, requestData)
 
       // 保存令牌信息
       uploadToken.value = {
@@ -51,8 +35,17 @@ export function useUploadToken() {
       console.log('获取上传令牌成功:', uploadToken.value)
       return uploadToken.value
     } catch (err) {
-      tokenError.value = err.message
       console.error('获取上传令牌失败:', err)
+      // 处理错误消息
+      if (err.message.includes('401')) {
+        tokenError.value = ERROR_CONFIG.ERROR_MESSAGES.AUTH_ERROR
+      } else if (err.message.includes('Network')) {
+        tokenError.value = ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR
+      } else if (err.message.includes('50')) {
+        tokenError.value = ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR
+      } else {
+        tokenError.value = ERROR_CONFIG.SHOW_DETAILED_ERRORS ? err.message : ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR
+      }
       throw err
     } finally {
       isGettingToken.value = false
@@ -62,40 +55,30 @@ export function useUploadToken() {
   // 保存上传结果
   const saveUploadResult = async (fileId, itemType, itemId) => {
     try {
-      const apiUrl = `${BASE_URL}/api/upload/video/save`
-
-      // 从 sessionStorage 获取 token
-      const token = sessionStorage.getItem('token')
-      if (!token) {
-        throw new Error('未找到认证令牌，请重新登录')
+      // 准备请求数据
+      const requestData = {
+        file_id: fileId,
+        item_type: itemType,
+        item_id: itemId
       }
 
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          file_id: fileId,
-          item_type: itemType,
-          item_id: itemId
-        })
-      })
-
-      // 尝试解析 JSON 响应
-      const data = await response.json()
-
-      if (!response.ok) {
-        // 如果响应中包含 message 字段，使用它作为错误消息
-        const errorMessage = data.message || `HTTP ${response.status}: ${response.statusText}`
-        throw new Error(errorMessage)
-      }
+      // 使用 api 工具保存上传结果
+      const data = await api.post(API_ENDPOINTS.SAVE_UPLOAD, requestData)
 
       console.log('保存上传结果成功:', data)
       return data
     } catch (err) {
       console.error('保存上传结果失败:', err)
+      // 处理错误消息
+      if (err.message.includes('401')) {
+        tokenError.value = ERROR_CONFIG.ERROR_MESSAGES.AUTH_ERROR
+      } else if (err.message.includes('Network')) {
+        tokenError.value = ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR
+      } else if (err.message.includes('50')) {
+        tokenError.value = ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR
+      } else {
+        tokenError.value = ERROR_CONFIG.SHOW_DETAILED_ERRORS ? err.message : ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR
+      }
       throw err
     }
   }
