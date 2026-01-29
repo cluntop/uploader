@@ -220,6 +220,18 @@ const searchItemId = async (filename, logger = console) => {
   const steps = []
   logger.log(`开始搜刮: ${filename}`)
   
+  // 检查认证状态
+  const token = sessionStorage.getItem('token')
+  if (!token) {
+    logger.error('未登录，无法搜索视频')
+    steps.push({ name: '认证检查', status: '失败', message: '未登录，无法搜索视频' })
+    const error = new Error('未登录，无法搜索视频')
+    error.steps = steps
+    error.type = 'auth_required'
+    throw error
+  }
+  steps.push({ name: '认证检查', status: '成功', message: '已登录，可以搜索视频' })
+  
   // 检查手动映射
   steps.push({ name: '手动映射检查', status: '开始', message: '检查是否有手动映射' })
   const manualMap = getManualMap()
@@ -323,62 +335,78 @@ const searchItemId = async (filename, logger = console) => {
   episode = regexResult.episode
   steps.push({ name: '正则表达式识别', status: '成功', message: `识别为 ${searchType === 'tv' ? '电视剧' : '电影'}: ${searchTitle} ${searchType === 'tv' ? `S${season}E${episode}` : ''}` })
   
+  // 验证搜索标题
+  if (!searchTitle || searchTitle.trim() === '') {
+    logger.error('搜索标题为空，无法搜索视频')
+    steps.push({ name: '标题验证', status: '失败', message: '搜索标题为空，无法搜索视频' })
+    const error = new Error('搜索标题为空，无法搜索视频')
+    error.steps = steps
+    error.type = 'empty_title'
+    throw error
+  }
+  
   // 搜索视频
   steps.push({ name: '视频搜索', status: '开始', message: `搜索 ${searchType === 'tv' ? '电视剧' : '电影'}: ${searchTitle}` })
-  const searchResults = await searchVideoId(searchTitle, logger)
-  if (searchResults.length > 0) {
-    const first = searchResults[0]
-    logger.log(`首个结果: ${first.video_title} (${first.video_type})`)
-    steps.push({ name: '视频搜索', status: '成功', message: `找到 ${searchResults.length} 个结果，使用第一个: ${first.video_title}` })
-    
-    const targetTmdb = first.tmdb_id
-    const targetTodb = first.todb_id
-    
-    if (searchType === 'tv' && first.video_type === 'tv') {
-      if (targetTmdb || targetTodb) {
-        steps.push({ name: '剧集定位', status: '开始', message: `尝试定位剧集 S${season}E${episode}` })
-        try {
-          const retryParams = {
-            video_id_type: targetTmdb ? 'tmdb' : 'todb',
-            video_id_value: targetTmdb || targetTodb,
-            season_number: season,
-            episode_number: episode
+  try {
+    const searchResults = await searchVideoId(searchTitle, logger)
+    if (searchResults.length > 0) {
+      const first = searchResults[0]
+      logger.log(`首个结果: ${first.video_title} (${first.video_type})`)
+      steps.push({ name: '视频搜索', status: '成功', message: `找到 ${searchResults.length} 个结果，使用第一个: ${first.video_title}` })
+      
+      const targetTmdb = first.tmdb_id
+      const targetTodb = first.todb_id
+      
+      if (searchType === 'tv' && first.video_type === 'tv') {
+        if (targetTmdb || targetTodb) {
+          steps.push({ name: '剧集定位', status: '开始', message: `尝试定位剧集 S${season}E${episode}` })
+          try {
+            const retryParams = {
+              video_id_type: targetTmdb ? 'tmdb' : 'todb',
+              video_id_value: targetTmdb || targetTodb,
+              season_number: season,
+              episode_number: episode
+            }
+            
+            const retryResult = await getVideoId(retryParams, logger)
+            if (retryResult.episode_info) {
+              steps.push({ name: '剧集定位', status: '成功', message: `找到剧集: ${retryResult.episode_info.episode_title}` })
+              return {
+                video_id: retryResult.episode_info.item_id,
+                item_type: 've',
+                title: retryResult.episode_info.episode_title,
+                media_uuid: null
+              }
+            }
+            steps.push({ name: '剧集定位', status: '失败', message: `未找到剧集 S${season}E${episode}` })
+          } catch (e) {
+            logger.error('重试获取视频 ID 失败:', e)
+            steps.push({ name: '剧集定位', status: '失败', message: `剧集定位失败: ${e.message}` })
           }
           
-          const retryResult = await getVideoId(retryParams, logger)
-          if (retryResult.episode_info) {
-            steps.push({ name: '剧集定位', status: '成功', message: `找到剧集: ${retryResult.episode_info.episode_title}` })
-            return {
-              video_id: retryResult.episode_info.item_id,
-              item_type: 've',
-              title: retryResult.episode_info.episode_title,
-              media_uuid: null
-            }
-          }
-          steps.push({ name: '剧集定位', status: '失败', message: `未找到剧集 S${season}E${episode}` })
-        } catch (e) {
-          logger.error('重试获取视频 ID 失败:', e)
-          steps.push({ name: '剧集定位', status: '失败', message: `剧集定位失败: ${e.message}` })
+          const error = new Error(`无法定位 S${season}E${episode}`)
+          error.steps = steps
+          error.type = 'episode_not_found'
+          throw error
         }
-        
-        const error = new Error(`无法定位 S${season}E${episode}`)
-        error.steps = steps
-        error.type = 'episode_not_found'
-        throw error
       }
-    }
-    
-    if (searchType === 'movie' || first.video_type === 'vl') {
-      steps.push({ name: '视频匹配', status: '成功', message: `匹配到视频: ${first.video_title}` })
-      return {
-        video_id: first.video_id,
-        item_type: 'vl',
-        title: first.video_title,
-        media_uuid: null
+      
+      if (searchType === 'movie' || first.video_type === 'vl') {
+        steps.push({ name: '视频匹配', status: '成功', message: `匹配到视频: ${first.video_title}` })
+        return {
+          video_id: first.video_id,
+          item_type: 'vl',
+          title: first.video_title,
+          media_uuid: null
+        }
       }
+    } else {
+      logger.error('未找到相关视频')
+      steps.push({ name: '视频搜索', status: '失败', message: `未找到相关 ${searchType === 'tv' ? '电视剧' : '电影'}` })
     }
-  } else {
-    steps.push({ name: '视频搜索', status: '失败', message: `未找到相关 ${searchType === 'tv' ? '电视剧' : '电影'}` })
+  } catch (e) {
+    logger.error('搜索视频失败:', e)
+    steps.push({ name: '视频搜索', status: '失败', message: `搜索视频失败: ${e.message}` })
   }
   
   logger.log('最终无结果')
