@@ -7,14 +7,14 @@ services:
     # 镜像名称
     image: node:18-alpine
     # 命令
-    command: /bin/sh -c "npm run build && npm install -g serve && serve -s dist -l 3000"
+    command: /bin/sh -c "npm install --include=dev && npm run build && npm install -g serve && serve -s dist -l 3000"
     # 工作目录
     working_dir: /app
     # 容器名称
     container_name: emos
     # 端口映射
     ports:
-      - "8000:3000"
+      - "127.0.0.1:8000:3000"
     # 重启策略
     restart: unless-stopped
     # 环境变量
@@ -24,6 +24,11 @@ services:
     # 可选：挂载环境变量文件
     # env_file:
     #   - .env.production
+    # 数据卷挂载
+    volumes:
+      - ./src:/app/src
+      - ./dist:/app/dist
+      - ./.env.production:/app/.env.production
 
 # 使用说明：
 # 1. 构建并运行服务：docker-compose up -d

@@ -120,7 +120,7 @@ export function useUpload() {
         const end = Math.min(start + chunkSize, total) - 1
         
         // 优化：使用 Blob.slice 而不是 File.slice，提高性能
-        const chunk = file.slice(start, end + 1)
+        let chunk = file.slice(start, end + 1)
 
         console.log(`上传分片 ${i + 1}/${chunks}: bytes ${start}-${end}/${total}`)
 
