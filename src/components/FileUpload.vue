@@ -16,10 +16,15 @@
           📹 视频
         </button>
         <button
-          disabled
-          class="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-400 cursor-not-allowed"
+          @click="uploadType = 'subtitle'"
+          :class="[
+            'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300',
+            uploadType === 'subtitle'
+              ? 'gradient-theme text-white shadow-md'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          ]"
         >
-          📝 字幕（即将开放）
+          📝 字幕
         </button>
         <button
           disabled

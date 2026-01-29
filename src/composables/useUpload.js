@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { CHUNK_SIZE, MIN_CHUNK_SIZE, NETWORK_CONFIG, ERROR_CONFIG } from '../config'
 import api from '../utils/api'
+import { searchItemId, addManualMap } from '../utils/recognize'
 
 export function useUpload() {
   const uploadProgress = ref(0)
@@ -220,6 +221,46 @@ export function useUpload() {
     }
   }
 
+  // 获取上传基础信息
+  const getUploadBase = async (itemType, itemId) => {
+    try {
+      await api.get('/api/upload/video/base', {
+        params: {
+          item_type: itemType,
+          item_id: itemId
+        }
+      })
+    } catch (e) {
+      console.error('获取上传基础信息失败:', e)
+      throw e
+    }
+  }
+
+  // 获取上传令牌
+  const getUploadToken = async (payload) => {
+    try {
+      const response = await api.post('/api/upload/getUploadToken', payload)
+      return response
+    } catch (e) {
+      console.error('获取上传令牌失败:', e)
+      throw e
+    }
+  }
+
+  // 保存上传结果
+  const saveUpload = async (payload, isSubtitle = false) => {
+    try {
+      if (isSubtitle) {
+        return await api.post('/api/upload/subtitle/save', payload)
+      } else {
+        return await api.post('/api/upload/video/save', payload)
+      }
+    } catch (e) {
+      console.error('保存上传结果失败:', e)
+      throw e
+    }
+  }
+
   // 上传文件（自动选择分片或完整上传，支持断点续传）
   const uploadFile = async (file, uploadUrl, onProgress) => {
     if (!file || !uploadUrl) {
@@ -286,6 +327,110 @@ export function useUpload() {
     }
   }
 
+  // 完整上传流程（包含识别和保存）
+  const uploadWithRecognition = async (file, onProgress) => {
+    if (!file) {
+      if (onProgress) {
+        onProgress('文件不能为空', 'error')
+      }
+      return null
+    }
+
+    // 重置进度
+    uploadProgress.value = 0
+    uploadSpeed.value = ''
+    isUploading.value = true
+    canResume.value = false
+
+    try {
+      if (onProgress) {
+        onProgress('正在识别文件...', 'uploading')
+      }
+
+      // 识别文件
+      const info = await searchItemId(file.name, console)
+      
+      if (!info) {
+        throw new Error('文件识别失败')
+      }
+
+      if (onProgress) {
+        onProgress(`识别成功: ${info.title}`, 'uploading')
+      }
+
+      // 获取上传基础信息
+      await getUploadBase(info.item_type, info.video_id)
+
+      // 确定文件类型
+      const ext = file.name.split('.').pop().toLowerCase()
+      const isSubtitle = ['srt', 'ass', 'ssa', 'vtt'].includes(ext)
+      
+      // MIME 类型映射
+      const mimeMap = {
+        'mp4': 'video/mp4',
+        'mkv': 'video/mp4',
+        'avi': 'video/mp4',
+        'mov': 'video/quicktime',
+        'srt': 'application/x-subrip',
+        'ass': 'text/x-ssa'
+      }
+      
+      const mime = mimeMap[ext] || 'application/octet-stream'
+
+      // 获取上传令牌
+      const tokenPayload = {
+        type: isSubtitle ? 'subtitle' : 'video',
+        file_type: mime,
+        file_name: file.name,
+        file_size: file.size,
+        file_storage: 'default'
+      }
+
+      const tokenData = await getUploadToken(tokenPayload)
+
+      if (!tokenData.data || !tokenData.data.upload_url) {
+        throw new Error('获取上传令牌失败')
+      }
+
+      const uploadUrl = tokenData.data.upload_url
+
+      if (onProgress) {
+        onProgress('正在上传文件...', 'uploading')
+      }
+
+      // 上传文件
+      await uploadFile(file, uploadUrl, onProgress)
+
+      // 保存上传结果
+      const savePayload = {
+        item_type: info.item_type,
+        item_id: info.video_id,
+        file_id: tokenData.file_id
+      }
+
+      if (isSubtitle && info.media_uuid) {
+        savePayload.media_uuid = info.media_uuid
+      }
+
+      const saveResponse = await saveUpload(savePayload, isSubtitle)
+
+      if (onProgress) {
+        onProgress('上传完成！', 'success')
+      }
+
+      return saveResponse
+    } catch (error) {
+      console.error('上传流程异常:', error)
+      if (onProgress) {
+        onProgress(`上传出错: ${error.message}`, 'error')
+      }
+      throw error
+    } finally {
+      isUploading.value = false
+      currentUploadController = null
+    }
+  }
+
   // 取消上传
   const cancelUpload = () => {
     if (currentUploadController) {
@@ -300,8 +445,12 @@ export function useUpload() {
     lastUploadedFile,
     canResume,
     uploadFile,
+    uploadWithRecognition,
     cancelUpload,
     clearUploadProgress,
-    formatFileSize
+    formatFileSize,
+    getUploadBase,
+    getUploadToken,
+    saveUpload
   }
 }
