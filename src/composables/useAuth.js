@@ -5,6 +5,8 @@ import api from '../utils/api'
 export function useAuth() {
   const token = ref('')
   const username = ref('')
+  const userId = ref('')
+  const avatar = ref('')
   const isLoggedIn = ref(false)
   const isLoading = ref(false)
   const error = ref(null)
@@ -14,14 +16,30 @@ export function useAuth() {
     return isLoggedIn.value && token.value !== ''
   })
 
+  // 生成唯一 UUID
+  const generateUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0
+      const v = c === 'x' ? r : (r & 0x3 | 0x8)
+      return v.toString(16)
+    })
+  }
+
   // 获取用户信息
   const getUserInfo = () => {
     try {
       const savedToken = sessionStorage.getItem('token')
       const savedUsername = sessionStorage.getItem('username')
+      const savedUserId = sessionStorage.getItem('user_id')
+      const savedAvatar = sessionStorage.getItem('avatar')
 
-      if (savedToken && savedUsername) {
-        return { token: savedToken, username: savedUsername }
+      if (savedToken && savedUsername && savedUserId) {
+        return {
+          token: savedToken,
+          username: savedUsername,
+          user_id: savedUserId,
+          avatar: savedAvatar
+        }
       }
       return null
     } catch (err) {
@@ -31,12 +49,16 @@ export function useAuth() {
   }
 
   // 保存用户信息
-  const saveUserInfo = (userToken, userName) => {
+  const saveUserInfo = (userToken, userName, userId, userAvatar) => {
     try {
       sessionStorage.setItem('token', userToken)
       sessionStorage.setItem('username', userName)
+      sessionStorage.setItem('user_id', userId)
+      sessionStorage.setItem('avatar', userAvatar || '')
       token.value = userToken
       username.value = userName
+      userId.value = userId
+      avatar.value = userAvatar || ''
       isLoggedIn.value = true
       error.value = null
       return true
@@ -52,8 +74,12 @@ export function useAuth() {
     try {
       sessionStorage.removeItem('token')
       sessionStorage.removeItem('username')
+      sessionStorage.removeItem('user_id')
+      sessionStorage.removeItem('avatar')
       token.value = ''
       username.value = ''
+      userId.value = ''
+      avatar.value = ''
       isLoggedIn.value = false
       error.value = null
       // 清除 API 缓存
@@ -71,6 +97,8 @@ export function useAuth() {
       if (userInfo) {
         token.value = userInfo.token
         username.value = userInfo.username
+        userId.value = userInfo.user_id
+        avatar.value = userInfo.avatar
         isLoggedIn.value = true
         error.value = null
         console.log('用户已登录:', userInfo)
@@ -89,10 +117,12 @@ export function useAuth() {
       const urlParams = new URLSearchParams(window.location.search)
       const callbackToken = urlParams.get('token')
       const callbackUsername = urlParams.get('username')
+      const callbackUserId = urlParams.get('user_id')
+      const callbackAvatar = urlParams.get('avatar')
 
-      if (callbackToken && callbackUsername) {
+      if (callbackToken && callbackUsername && callbackUserId) {
         console.log('检测到登录回调，保存用户信息')
-        const saved = saveUserInfo(callbackToken, callbackUsername)
+        const saved = saveUserInfo(callbackToken, callbackUsername, callbackUserId, callbackAvatar)
 
         if (saved) {
           // 清除 URL 中的参数
@@ -112,8 +142,10 @@ export function useAuth() {
   // 登录
   const login = () => {
     try {
-      const callbackUrl = encodeURIComponent(window.location.href)
-      const loginUrl = `${BASE_URL}${LOGIN_URL}&url=${callbackUrl}`
+      const uuid = generateUUID()
+      const name = 'emos-upload'
+      const callbackUrl = encodeURIComponent(window.location.origin + window.location.pathname)
+      const loginUrl = `https://emos.best/link?uuid=${uuid}&name=${encodeURIComponent(name)}&url=${callbackUrl}`
       console.log('跳转到登录页面:', loginUrl)
       window.location.href = loginUrl
     } catch (err) {
@@ -174,6 +206,8 @@ export function useAuth() {
   return {
     token,
     username,
+    userId,
+    avatar,
     isLoggedIn,
     isAuthenticated,
     isLoading,

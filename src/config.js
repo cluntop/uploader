@@ -11,7 +11,6 @@
 
 // API 基础配置
 export const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://dev.emos.lol'
-export const LOGIN_URL = '/api/link?uuid=9dbf2c0c-7fa2-49a6-a37b-a4ebc9406049&name=上传服务'
 
 // API 端点配置
 export const API_ENDPOINTS = {
