@@ -3,15 +3,15 @@ version: '3.8'
 services:
   uploader:
     # 构建配置
-    build:
-      # 构建上下文
-      context: .
-      # 使用当前目录的 Dockerfile
-      dockerfile: Dockerfile
+    build: .
     # 镜像名称
-    image: emos-uploader
+    image: node:18-alpine
+    # 命令
+    command: /bin/sh -c "npm run build && npm install -g serve && serve -s dist -l 3000"
+    # 工作目录
+    working_dir: /app
     # 容器名称
-    container_name: emos-uploader
+    container_name: emos
     # 端口映射
     ports:
       - "8000:3000"
@@ -31,5 +31,5 @@ services:
 # 3. 查看服务状态：docker-compose ps
 # 4. 查看服务日志：docker-compose logs -f
 
-# 注意：使用 docker-compose up -d 命令会自动构建镜像（如果需要）并运行容器，
-# 无需手动执行 docker build 命令
+# 注意：使用 docker-compose up -d 命令会自动构建镜像并运行容器，
+# 容器会在启动时执行构建、安装 serve 并启动服务
