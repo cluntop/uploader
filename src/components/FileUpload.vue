@@ -456,6 +456,9 @@ const recognizeFile = async (file) => {
         } else if (message.includes('精准定位')) {
           recognitionStep.value = '精准定位视频...'
         }
+      },
+      error: (message) => {
+        console.error(message)
       }
     })
 
