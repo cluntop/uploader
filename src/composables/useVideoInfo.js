@@ -69,7 +69,7 @@ export function useVideoInfo() {
       // 处理错误消息
       if (err.message.includes('401')) {
         error.value = ERROR_CONFIG.ERROR_MESSAGES.AUTH_ERROR
-      } else if (err.message.includes('Network')) {
+      } else if (err.message.includes('Network') || err.message.includes('Failed to fetch')) {
         error.value = ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR
       } else if (err.message.includes('50')) {
         error.value = ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR

@@ -97,7 +97,7 @@ const retryRequest = async (url, options, attempt = 1) => {
     console.error(`API 请求失败 (${attempt}/${RETRY_CONFIG.maxAttempts}):`, error)
     // 只对网络错误或 5xx 错误进行重试
     if (attempt < RETRY_CONFIG.maxAttempts && 
-        (error.message.includes('Network') || error.status >= 500 || error.message.includes('50'))) {
+        (error.message.includes('Network') || error.message.includes('Failed to fetch') || error.status >= 500 || error.message.includes('50'))) {
       const delay = RETRY_CONFIG.delay * Math.pow(RETRY_CONFIG.backoff, attempt - 1)
       console.log(`正在重试 (${attempt}/${RETRY_CONFIG.maxAttempts})，延迟 ${delay}ms...`)
       await new Promise(resolve => setTimeout(resolve, delay))
