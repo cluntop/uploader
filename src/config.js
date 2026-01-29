@@ -10,13 +10,21 @@
  */
 
 // API 基础配置
-export const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://dev.emos.lol'
+export const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://emos.best'
 
 // API 端点配置
 export const API_ENDPOINTS = {
+  // 视频相关
+  VIDEO_TREE: '/api/video/tree',
+  VIDEO_LIST: '/api/video/list',
+  GET_VIDEO_ID: '/api/video/getVideoId',
+  MEDIA_LIST: '/api/video/media/list',
+  
+  // 上传相关
   VIDEO_INFO: '/api/upload/video/base',
   UPLOAD_TOKEN: '/api/upload/getUploadToken',
-  SAVE_UPLOAD: '/api/upload/video/save'
+  SAVE_VIDEO: '/api/upload/video/save',
+  SAVE_SUBTITLE: '/api/upload/subtitle/save'
 }
 
 // 分片配置

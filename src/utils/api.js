@@ -66,9 +66,15 @@ const handleResponse = async (response) => {
     // 尝试解析错误响应
     try {
       const errorData = await response.json()
-      throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`)
+      const errorMessage = errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`
+      const error = new Error(errorMessage)
+      error.status = response.status
+      error.data = errorData
+      throw error
     } catch (e) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      const error = new Error(`HTTP ${response.status}: ${response.statusText}`)
+      error.status = response.status
+      throw error
     }
   }
 
@@ -83,13 +89,17 @@ const handleResponse = async (response) => {
 // 重试机制
 const retryRequest = async (url, options, attempt = 1) => {
   try {
+    console.log(`API 请求 (${attempt}/${RETRY_CONFIG.maxAttempts}): ${url}`)
     const response = await fetch(url, options)
+    console.log(`API 响应状态: ${response.status}`)
     return await handleResponse(response)
   } catch (error) {
+    console.error(`API 请求失败 (${attempt}/${RETRY_CONFIG.maxAttempts}):`, error)
     // 只对网络错误或 5xx 错误进行重试
     if (attempt < RETRY_CONFIG.maxAttempts && 
-        (error.message.includes('Network') || error.message.includes('50'))) {
+        (error.message.includes('Network') || error.status >= 500 || error.message.includes('50'))) {
       const delay = RETRY_CONFIG.delay * Math.pow(RETRY_CONFIG.backoff, attempt - 1)
+      console.log(`正在重试 (${attempt}/${RETRY_CONFIG.maxAttempts})，延迟 ${delay}ms...`)
       await new Promise(resolve => setTimeout(resolve, delay))
       return retryRequest(url, options, attempt + 1)
     }

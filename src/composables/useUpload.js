@@ -364,6 +364,7 @@ export function useUpload() {
       // 确定文件类型
       const ext = file.name.split('.').pop().toLowerCase()
       const isSubtitle = ['srt', 'ass', 'ssa', 'vtt'].includes(ext)
+      const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext)
       
       // MIME 类型映射
       const mimeMap = {
@@ -372,14 +373,27 @@ export function useUpload() {
         'avi': 'video/mp4',
         'mov': 'video/quicktime',
         'srt': 'application/x-subrip',
-        'ass': 'text/x-ssa'
+        'ass': 'text/x-ssa',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp',
+        'bmp': 'image/bmp'
       }
       
       const mime = mimeMap[ext] || 'application/octet-stream'
 
       // 获取上传令牌
+      let uploadType = 'video'
+      if (isSubtitle) {
+        uploadType = 'subtitle'
+      } else if (isImage) {
+        uploadType = 'image'
+      }
+      
       const tokenPayload = {
-        type: isSubtitle ? 'subtitle' : 'video',
+        type: uploadType,
         file_type: mime,
         file_name: file.name,
         file_size: file.size,

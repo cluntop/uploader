@@ -10,6 +10,7 @@
  */
 
 import api from './api'
+import { API_ENDPOINTS } from '../config'
 
 // 识别 API 端点
 const RECOGNIZE_API = 'https://emos.prlo.de/api/recognize'
@@ -55,7 +56,7 @@ const clearManualMap = (filename) => {
 const searchVideoId = async (title, logger = console) => {
   try {
     logger.log(`搜索视频: ${title}`)
-    const response = await api.get('/api/video/list', {
+    const response = await api.get(API_ENDPOINTS.VIDEO_LIST, {
       params: {
         title,
         page: 1,
@@ -79,7 +80,7 @@ const searchVideoId = async (title, logger = console) => {
 const getVideoId = async (params, logger = console) => {
   try {
     logger.log(`获取视频 ID:`, params)
-    const response = await api.get('/api/video/getVideoId', {
+    const response = await api.get(API_ENDPOINTS.GET_VIDEO_ID, {
       params
     })
     logger.log(`获取视频 ID 成功:`, response)
@@ -87,6 +88,36 @@ const getVideoId = async (params, logger = console) => {
   } catch (e) {
     logger.error('获取视频 ID 失败:', e)
     throw e
+  }
+}
+
+// 获取视频目录树
+const getVideoTree = async (params, logger = console) => {
+  try {
+    logger.log(`获取视频目录树:`, params)
+    const response = await api.get(API_ENDPOINTS.VIDEO_TREE, {
+      params
+    })
+    logger.log(`获取视频目录树成功:`, response)
+    return response
+  } catch (e) {
+    logger.error('获取视频目录树失败:', e)
+    return null
+  }
+}
+
+// 获取资源列表
+const getMediaList = async (params, logger = console) => {
+  try {
+    logger.log(`获取资源列表:`, params)
+    const response = await api.get(API_ENDPOINTS.MEDIA_LIST, {
+      params
+    })
+    logger.log(`获取资源列表成功:`, response)
+    return response
+  } catch (e) {
+    logger.error('获取资源列表失败:', e)
+    return null
   }
 }
 
@@ -288,6 +319,20 @@ const searchItemId = async (filename, logger = console) => {
   if (tmdbId) {
     steps.push({ name: '精准定位', status: '开始', message: `通过 TMDB ID ${tmdbId} 精准定位视频` })
     try {
+      // 先尝试通过目录树 API 获取视频信息
+      const treeParams = {
+        type: searchType === 'tv' ? 'tv' : 'movie',
+        tmdb_id: tmdbId
+      }
+      
+      const treeResult = await getVideoTree(treeParams, logger)
+      if (treeResult && treeResult.success) {
+        steps.push({ name: '目录树查询', status: '成功', message: `通过目录树找到视频信息` })
+        // 可以从目录树结果中获取更多信息
+      } else {
+        steps.push({ name: '目录树查询', status: '失败', message: '目录树查询无结果，使用常规方法' })
+      }
+      
       const params = {
         video_id_type: 'tmdb',
         video_id_value: tmdbId,
@@ -420,5 +465,7 @@ export {
   searchItemId,
   addManualMap,
   clearManualMap,
-  getManualMap
+  getManualMap,
+  getVideoTree,
+  getMediaList
 }
