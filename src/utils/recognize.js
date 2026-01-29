@@ -166,14 +166,37 @@ const recognizeByRegex = (filename, logger = console) => {
   else {
     searchType = 'movie'
     // 提取标题，移除年份和其他标记
-    searchTitle = parseName
-      .replace(/\d{4}.*$/, '')  // 移除年份及后面的内容
-      .replace(/\[.*?\]/g, '')  // 移除 [...] 中的内容
-      .replace(/\(.*?\)/g, '')  // 移除 (...) 中的内容
-      .replace(/\./g, ' ')  // 替换点为空格
-      .replace(/_/g, ' ')  // 替换下划线为空格
-      .replace(/\s+/g, ' ')  // 合并多个空格
+    // 处理以年份开头的文件名
+    let tempName = parseName
+    // 先移除 [...] 和 (...) 中的内容
+    tempName = tempName.replace(/\[.*?\]/g, '').trim()
+    tempName = tempName.replace(/\(.*?\)/g, '').trim()
+    
+    // 匹配年份（通常在标题中间或末尾）
+    const yearMatch = /\b(19|20)\d{2}\b/.exec(tempName)
+    if (yearMatch) {
+      // 如果找到年份，移除年份及后面的内容
+      searchTitle = tempName.substring(0, yearMatch.index)
+        .replace(/\./g, ' ')  // 替换点为空格
+        .replace(/_/g, ' ')  // 替换下划线为空格
+        .replace(/\s+/g, ' ')  // 合并多个空格
+        .trim()
+    } else {
+      // 如果没有找到年份，使用整个文件名
+      searchTitle = tempName
+        .replace(/\./g, ' ')  // 替换点为空格
+        .replace(/_/g, ' ')  // 替换下划线为空格
+        .replace(/\s+/g, ' ')  // 合并多个空格
+        .trim()
+    }
+    
+    // 进一步清理标题
+    searchTitle = searchTitle
+      .replace(/\b(HD|1080p|720p|480p|2160p|UHD|BluRay|DVD|WEB-DL|WEBRip|HDRip|BDRip|DVDRip)\b/gi, '')
+      .replace(/\b(AC3|DTS|x264|x265|HEVC|AAC|MP3)\b/gi, '')
+      .replace(/\s+/g, ' ')
       .trim()
+    
     logger.log(`正则 Movie: ${searchTitle}`)
   }
   
