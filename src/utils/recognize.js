@@ -228,6 +228,15 @@ const recognizeByRegex = (filename, logger = console) => {
       .replace(/\s+/g, ' ')
       .trim()
     
+    // 增强鲁棒性：如果搜索标题为空，使用原始文件名
+    if (!searchTitle || searchTitle.trim() === '') {
+      searchTitle = parseName
+        .replace(/\./g, ' ')  // 替换点为空格
+        .replace(/_/g, ' ')  // 替换下划线为空格
+        .replace(/\s+/g, ' ')  // 合并多个空格
+        .trim()
+    }
+    
     logger.log(`正则 Movie: ${searchTitle}`)
   }
   
@@ -296,6 +305,17 @@ const searchItemId = async (filename, logger = console) => {
     
     searchType = isTv ? 'tv' : 'movie'
     tmdbId = m.tmdb_id
+    
+    // 设置搜索标题
+    if (m.title) {
+      searchTitle = m.title
+    } else if (m.original_title) {
+      searchTitle = m.original_title
+    } else if (meta.name) {
+      searchTitle = meta.name
+    }
+    
+    logger.log(`API 识别标题: ${searchTitle}`)
     
     if (isTv) {
       const seMatch = /S(\d+)\s*E(\d+)/i.exec(meta.season_episode || '')
@@ -382,12 +402,30 @@ const searchItemId = async (filename, logger = console) => {
   
   // 验证搜索标题
   if (!searchTitle || searchTitle.trim() === '') {
-    logger.error('搜索标题为空，无法搜索视频')
-    steps.push({ name: '标题验证', status: '失败', message: '搜索标题为空，无法搜索视频' })
-    const error = new Error('搜索标题为空，无法搜索视频')
-    error.steps = steps
-    error.type = 'empty_title'
-    throw error
+    // 尝试使用原始文件名作为fallback
+    searchTitle = filename
+      .replace(/\.[^/.]+$/, '')  // 移除扩展名
+      .replace(/\[.*?\]/g, '')  // 移除 [...] 中的内容
+      .replace(/\(.*?\)/g, '')  // 移除 (...) 中的内容
+      .replace(/\./g, ' ')  // 替换点为空格
+      .replace(/_/g, ' ')  // 替换下划线为空格
+      .replace(/\s+/g, ' ')  // 合并多个空格
+      .trim()
+    
+    // 再次验证
+    if (!searchTitle || searchTitle.trim() === '') {
+      logger.error('搜索标题为空，无法搜索视频')
+      steps.push({ name: '标题验证', status: '失败', message: '搜索标题为空，无法搜索视频' })
+      const error = new Error('搜索标题为空，无法搜索视频')
+      error.steps = steps
+      error.type = 'empty_title'
+      throw error
+    } else {
+      logger.log(`使用原始文件名作为搜索标题: ${searchTitle}`)
+      steps.push({ name: '标题验证', status: '成功', message: `使用原始文件名作为搜索标题: ${searchTitle}` })
+    }
+  } else {
+    steps.push({ name: '标题验证', status: '成功', message: `搜索标题: ${searchTitle}` })
   }
   
   // 搜索视频
