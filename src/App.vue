@@ -100,25 +100,7 @@ const isSaving = ref(false) // 是否正在保存上传结果
 const handleRecognitionComplete = (result) => {
   currentRecognitionResult.value = result
   console.log('识别完成:', result)
-  
-  // 将识别结果转换为与手动输入 ID 相同的格式
-  if (result) {
-    // 填充视频 ID
-    video.videoId.value = result.video_id
-    // 验证视频 ID
-    video.updateValidation(result.video_id)
-    
-    // 构建与手动输入 ID 相同格式的视频信息
-    video.videoInfo.value = {
-      video_id: result.video_id,
-      video_title: result.title,
-      item_type: result.item_type,
-      // 其他可能需要的字段
-      file_storage: 'default'
-    }
-    
-    notification.showStatus(`识别成功: ${result.title} (ID: ${result.video_id})`, 'success')
-  }
+  notification.showStatus(`识别成功: ${result.title}`, 'success')
 }
 
 // 检查上传 token 是否过期
@@ -308,26 +290,47 @@ const handleStartUpload = async (file, uploadType, idMode = 'manual', recognitio
   notification.hideStatus()
 
   try {
-    // 获取视频信息
-    let videoInfo = null
+    // 自动识别模式
     if (idMode === 'auto') {
-      // 自动识别模式
       const result = recognitionResult || currentRecognitionResult.value
       if (!result) {
         throw new Error('识别结果不存在，请重新选择文件')
       }
-      videoInfo = result
-      notification.showStatus(`正在上传到: ${result.title}`, 'uploading')
-    } else {
-      // 手动输入 ID 模式
-      if (!video.videoInfo.value) {
-        throw new Error('请先获取视频信息后再上传！')
+
+      notification.showStatus('正在使用自动识别上传...', 'uploading')
+      
+      // 使用完整上传流程（包含识别）
+      const uploadResult = await upload.uploadWithRecognition(
+        file,
+        (msg, type) => {
+          notification.showStatus(msg, type)
+        }
+      )
+      
+      // 构建上传成功消息
+      let uploadSuccessMessage = '上传成功！'
+      if (uploadResult && uploadResult.count) {
+        uploadSuccessMessage += ` 这是您上传的第 ${uploadResult.count} 个资源`
       }
-      videoInfo = video.videoInfo.value
-      notification.showStatus(`正在上传到: ${video.videoInfo.value.video_title}`, 'uploading')
+      if (uploadResult && uploadResult.radish) {
+        uploadSuccessMessage += `, 恭喜您获得 ${uploadResult.radish} 个胡萝卜！`
+      }
+      
+      notification.showStatus(uploadSuccessMessage, 'success')
+      
+      // 构建上传汇总信息
+      uploadSummaryInfo.value = {
+        fileName: file.name,
+        fileSize: file.size,
+        uploadTime: new Date().toISOString(),
+        totalCount: uploadResult?.count || 0,
+        radishReward: uploadResult?.radish || 0
+      }
+      
+      return
     }
 
-    // 统一获取上传令牌
+    // 手动模式：先获取 token，成功后立即上传
     notification.showStatus('正在获取上传令牌...', 'uploading')
 
     await uploadToken.getUploadToken(
@@ -340,7 +343,7 @@ const handleStartUpload = async (file, uploadType, idMode = 'manual', recognitio
 
     notification.showStatus('上传令牌获取成功，开始上传...', 'uploading')
 
-    // 上传文件
+    // 第二步：使用上传令牌中的 upload_url 上传文件
     const uploadResponse = await upload.uploadFile(
       file,
       uploadToken.uploadToken.value.upload_url,
@@ -355,7 +358,7 @@ const handleStartUpload = async (file, uploadType, idMode = 'manual', recognitio
       fileId: uploadToken.uploadToken.value.file_id
     }
 
-    // 立即展示上传成功的信息
+    // 立即展示 OneDrive 上传成功的信息
     let uploadSuccessMessage = '上传成功！'
     if (uploadResponse && uploadResponse.size) {
       const fileSizeMB = (uploadResponse.size / (1024 * 1024)).toFixed(2)
@@ -400,32 +403,10 @@ const saveUploadedFile = async () => {
     isSaving.value = true
     notification.showStatus('正在保存上传结果...', 'uploading')
 
-    let itemType = 'vl'
-    let itemId = ''
-
-    // 处理视频 ID，支持自动识别和手动输入两种模式
-    if (currentIdMode.value === 'auto' && currentRecognitionResult.value) {
-      // 自动识别模式
-      const result = currentRecognitionResult.value
-      const videoId = result.video_id
-      const match = videoId.match(/^(vl|ve)-(\d+)$/)
-      if (match) {
-        itemType = match[1]
-        itemId = match[2]
-      } else {
-        throw new Error('视频 ID 格式不正确')
-      }
-    } else {
-      // 手动输入 ID 模式
-      const videoId = video.videoId.value.trim()
-      const match = videoId.match(/^(vl|ve)-(\d+)$/)
-      if (match) {
-        itemType = match[1]
-        itemId = match[2]
-      } else {
-        throw new Error('视频 ID 格式不正确')
-      }
-    }
+    const videoId = video.videoId.value.trim()
+    const match = videoId.match(/^(vl|ve)-(\d+)$/)
+    const itemType = match[1]
+    const itemId = match[2]
 
     const saveResult = await uploadToken.saveUploadResult(
       uploadedFileInfo.value.fileId,
@@ -443,7 +424,7 @@ const saveUploadedFile = async () => {
     showReupload.value = false
     showResave.value = false
 
-    // 构建上传汇总信息
+    // 构建上传汇总信息，包含 OneDrive 响应和服务器返回的统计信息
     const oneDriveResponse = uploadedFileInfo.value.uploadResponse
     uploadSummaryInfo.value = {
       fileName: oneDriveResponse?.name || currentFile.value?.name || '未知',

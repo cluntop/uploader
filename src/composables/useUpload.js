@@ -328,8 +328,6 @@ export function useUpload() {
   }
 
   // 完整上传流程（包含识别和保存）
-  // 注意：此函数已被 App.vue 中的统一上传逻辑替代
-  // 保留此函数以确保向后兼容性
   const uploadWithRecognition = async (file, onProgress) => {
     if (!file) {
       if (onProgress) {
