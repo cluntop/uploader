@@ -216,32 +216,6 @@
       <div class="text-gray-600 text-sm" v-if="videoId">
         视频ID: {{ videoId }}
       </div>
-      <div class="text-gray-600 text-sm" v-if="recognitionResult && recognitionResult.video_id">
-        识别到的视频ID: {{ recognitionResult.video_id }}
-      </div>
-      <div class="mt-3 flex flex-wrap gap-2">
-        <button 
-          v-if="idInputMode === 'auto'" 
-          @click="retryRecognition"
-          class="text-xs px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors flex items-center gap-1"
-        >
-          🔄 重新识别
-        </button>
-        <button 
-          v-if="recognitionError" 
-          @click="showErrorDetails = !showErrorDetails"
-          class="text-xs px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors flex items-center gap-1"
-        >
-          📋 {{ showErrorDetails ? '收起详情' : '查看详情' }}
-        </button>
-        <button 
-          v-if="recognitionResult" 
-          @click="resetRecognition"
-          class="text-xs px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors flex items-center gap-1"
-        >
-          🔄 重新选择
-        </button>
-      </div>
     </div>
 
     <!-- 进度条（上传过程中显示，保存期间和保存失败时隐藏） -->
