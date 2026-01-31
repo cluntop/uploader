@@ -55,6 +55,7 @@
       :upload-token="uploadToken.uploadToken.value"
       :upload-summary-info="uploadSummaryInfo"
       :format-file-size="upload.formatFileSize"
+      :is-logged-in="auth.isLoggedIn.value"
       @file-selected="handleFileSelected"
       @start-upload="handleStartUpload"
       @reupload="handleReupload"

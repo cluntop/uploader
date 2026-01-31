@@ -17,6 +17,7 @@ export const API_ENDPOINTS = {
   // 视频相关
   VIDEO_TREE: '/api/video/tree',
   VIDEO_LIST: '/api/video/list',
+  VIDEO_SEARCH: '/api/video/search',
   GET_VIDEO_ID: '/api/video/getVideoId',
   MEDIA_LIST: '/api/video/media/list',
   

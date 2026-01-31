@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- 上传类型选择 -->
-    <div v-if="!isUploading && !isSaving && !uploadSummaryInfo && !showResave" class="mb-4">
+    <div v-if="isLoggedIn && !isUploading && !isSaving && !uploadSummaryInfo && !showResave" class="mb-4">
       <label class="block text-gray-800 font-medium mb-2 text-sm">上传类型</label>
       <div class="flex gap-3">
         <button
@@ -36,7 +36,7 @@
     </div>
     
     <!-- 视频 ID 输入方式选择 -->
-    <div v-if="!isUploading && !isSaving && !uploadSummaryInfo && !showResave" class="mb-4">
+    <div v-if="isLoggedIn && !isUploading && !isSaving && !uploadSummaryInfo && !showResave" class="mb-4">
       <label class="block text-gray-800 font-medium mb-2 text-sm">视频 ID 输入方式</label>
       <div class="flex gap-3">
         <button
@@ -64,9 +64,20 @@
       </div>
     </div>
     
+    <!-- 未登录提示 -->
+    <div v-if="!isLoggedIn && !isUploading && !isSaving && !uploadSummaryInfo && !showResave" class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+      <div class="flex items-center">
+        <div class="text-yellow-600 font-medium mr-2">⚠️</div>
+        <div>
+          <div class="text-yellow-800 font-medium">请先登录</div>
+          <div class="text-yellow-600 text-sm">登录后才能选择文件和上传视频</div>
+        </div>
+      </div>
+    </div>
+    
     <!-- 上传区域 -->
     <div
-      v-if="!isUploading && !isSaving && !uploadSummaryInfo && !showResave"
+      v-if="isLoggedIn && !isUploading && !isSaving && !uploadSummaryInfo && !showResave"
       :class="[
         'border-2 border-dashed border-teal-500 rounded-lg p-10 text-center transition-all duration-300 bg-teal-50',
         'cursor-pointer hover:border-teal-600 hover:bg-teal-100',
@@ -178,7 +189,7 @@
     </div>
 
     <!-- 文件信息（上传和保存过程中都显示） -->
-    <div v-if="selectedFile && !uploadSummaryInfo" class="file-info mt-5 p-4 bg-gray-100 rounded-lg">
+    <div v-if="isLoggedIn && selectedFile && !uploadSummaryInfo" class="file-info mt-5 p-4 bg-gray-100 rounded-lg">
       <div class="font-medium text-gray-800 mb-1">
         文件名: {{ selectedFile.name }}
       </div>
@@ -255,7 +266,7 @@
 
     <!-- 上传按钮 -->
     <button
-      v-if="selectedFile && !isUploading && uploadProgress === 0 && !uploadSummaryInfo && !showReupload && !isRecognizing && (idInputMode === 'manual' || recognitionResult)"
+      v-if="isLoggedIn && selectedFile && !isUploading && uploadProgress === 0 && !uploadSummaryInfo && !showReupload && !isRecognizing && (idInputMode === 'manual' || recognitionResult)"
       @click="handleStartUpload"
       class="mt-4 w-full px-6 py-3 gradient-theme text-white rounded-lg text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
     >
@@ -264,7 +275,7 @@
 
     <!-- 重新上传按钮 -->
     <button
-      v-if="showReupload"
+      v-if="isLoggedIn && showReupload"
       @click="handleReupload"
       class="reupload-btn mt-4 w-full px-6 py-3 gradient-theme text-white rounded-lg text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
     >
@@ -273,7 +284,7 @@
 
     <!-- 重新保存按钮 -->
     <button
-      v-if="showResave"
+      v-if="isLoggedIn && showResave"
       @click="handleResave"
       class="resave-btn mt-4 w-full px-6 py-3 bg-orange-500 text-white rounded-lg text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300 hover:bg-orange-600"
     >
@@ -331,6 +342,10 @@ const props = defineProps({
   formatFileSize: {
     type: Function,
     required: true
+  },
+  isLoggedIn: {
+    type: Boolean,
+    default: false
   }
 })
 

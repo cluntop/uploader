@@ -56,25 +56,90 @@ const clearManualMap = (filename) => {
 const searchVideoId = async (title, logger = console) => {
   try {
     logger.log(`搜索视频: ${title}`)
-    const response = await api.get(API_ENDPOINTS.VIDEO_LIST, {
+    // 优先使用新的搜索端点
+    const newSearchParams = {
+      title,
+      page: 1,
+      page_size: 15
+    }
+    
+    const items = await searchVideoByNewEndpoint(newSearchParams, logger)
+    
+    // 如果新端点失败，回退到旧端点
+    if (items.length === 0) {
+      logger.log('新端点无结果，使用旧端点搜索')
+      const response = await api.get(API_ENDPOINTS.VIDEO_LIST, {
+        params: {
+          title,
+          page: 1,
+          page_size: 15
+        }
+      })
+      
+      const oldItems = response.items || []
+      logger.log(`旧端点搜索结果: ${oldItems.length} 个视频`)
+      if (oldItems.length > 0) {
+        logger.log(`首个结果: ${oldItems[0].video_title} (${oldItems[0].video_type})`)
+      }
+      return oldItems
+    }
+    
+    return items
+  } catch (e) {
+    logger.error('搜索视频失败:', e)
+    // 出错时回退到旧端点
+    try {
+      logger.log('新端点搜索失败，回退到旧端点')
+      const response = await api.get(API_ENDPOINTS.VIDEO_LIST, {
+        params: {
+          title,
+          page: 1,
+          page_size: 15
+        }
+      })
+      
+      const items = response.items || []
+      logger.log(`旧端点搜索结果: ${items.length} 个视频`)
+      return items
+    } catch (oldError) {
+      logger.error('旧端点搜索也失败:', oldError)
+      return []
+    }
+  }
+}
+
+// 使用新端点搜索视频
+const searchVideoByNewEndpoint = async (params, logger = console) => {
+  try {
+    logger.log(`使用新端点搜索视频:`, params)
+    const response = await api.get(API_ENDPOINTS.VIDEO_SEARCH, {
       params: {
-        title,
-        page: 1,
-        page_size: 15
+        last_id: params.last_id,
+        tmdb_id: params.tmdb_id,
+        todb_id: params.todb_id,
+        video_id: params.video_id,
+        type: params.type,
+        title: params.title,
+        with_genre: params.with_genre,
+        sort_by: params.sort_by,
+        page: params.page || 1,
+        page_size: params.page_size || 15
       }
     })
     
     const items = response.items || []
-    logger.log(`搜索结果: ${items.length} 个视频`)
+    logger.log(`新端点搜索结果: ${items.length} 个视频`)
     if (items.length > 0) {
-      logger.log(`首个结果: ${items[0].video_title} (${items[0].video_type})`)
+      logger.log(`首个结果: ${items[0].video_title || items[0].title} (${items[0].video_type || items[0].type})`)
     }
     return items
   } catch (e) {
-    logger.error('搜索视频失败:', e)
+    logger.error('新端点搜索视频失败:', e)
     return []
   }
 }
+
+
 
 // 获取视频 ID
 const getVideoId = async (params, logger = console) => {
@@ -339,7 +404,7 @@ const searchItemId = async (filename, logger = console) => {
   if (tmdbId) {
     steps.push({ name: '精准定位', status: '开始', message: `通过 TMDB ID ${tmdbId} 精准定位视频` })
     try {
-      // 先尝试通过目录树 API 获取视频信息
+      // 尝试通过目录树 API 获取视频信息
       const treeParams = {
         type: searchType === 'tv' ? 'tv' : 'movie',
         tmdb_id: tmdbId
@@ -431,17 +496,32 @@ const searchItemId = async (filename, logger = console) => {
   // 搜索视频
   steps.push({ name: '视频搜索', status: '开始', message: `搜索 ${searchType === 'tv' ? '电视剧' : '电影'}: ${searchTitle}` })
   try {
-    const searchResults = await searchVideoId(searchTitle, logger)
+    // 使用新的搜索端点进行更详细的搜索
+    const newSearchParams = {
+      title: searchTitle,
+      type: searchType === 'tv' ? 'tv' : 'movie',
+      page: 1,
+      page_size: 15
+    }
+    
+    let searchResults = await searchVideoByNewEndpoint(newSearchParams, logger)
+    
+    // 如果新端点无结果，使用旧的搜索方法
+    if (searchResults.length === 0) {
+      steps.push({ name: '视频搜索', status: '部分成功', message: '新端点无结果，使用旧的搜索方法' })
+      searchResults = await searchVideoId(searchTitle, logger)
+    }
+    
     if (searchResults.length > 0) {
       // 优先选择有 tmdb_id 的结果
       const tmdbResult = searchResults.find(item => item.tmdb_id)
       const first = tmdbResult || searchResults[0]
       
-      logger.log(`首选结果: ${first.video_title} (${first.video_type})${first.tmdb_id ? ` TMDB: ${first.tmdb_id}` : ''}`)
-      steps.push({ name: '视频搜索', status: '成功', message: `找到 ${searchResults.length} 个结果，使用 ${first.tmdb_id ? 'TMDB 匹配' : '首个'}结果: ${first.video_title}` })
+      logger.log(`首选结果: ${first.video_title || first.title} (${first.video_type || first.type})${first.tmdb_id ? ` TMDB: ${first.tmdb_id}` : ''}`)
+      steps.push({ name: '视频搜索', status: '成功', message: `找到 ${searchResults.length} 个结果，使用 ${first.tmdb_id ? 'TMDB 匹配' : '首个'}结果: ${first.video_title || first.title}` })
       
       const targetTmdb = first.tmdb_id
-      const targetTodb = first.todb_id
+      const targetTodb = first.todb_id || first.todbId
       
       // 如果有 tmdb_id，优先使用 tmdb_id 进行定位
       if (targetTmdb) {
@@ -546,6 +626,8 @@ const searchItemId = async (filename, logger = console) => {
 
 export {
   searchItemId,
+  searchVideoId,
+  searchVideoByNewEndpoint,
   addManualMap,
   clearManualMap,
   getManualMap,
