@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 .gradient-theme {
   background: linear-gradient(135deg, #4cbfaa 0%, #3a9d8f 100%);
