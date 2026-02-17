@@ -21,7 +21,7 @@
     <!-- 已登录状态 -->
     <div v-else class="flex items-center gap-4 text-white">
       <div class="bg-white/30 w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-sm overflow-hidden">
-        <img v-if="avatar" :src="avatar" alt="用户头像" class="w-full h-full object-cover" />
+        <img v-if="avatar && avatar.trim() !== ''" :src="avatar" alt="用户头像" class="w-full h-full object-cover" />
         <img v-else src="../assets/avatar.png" alt="用户头像" class="w-full h-full object-cover" />
       </div>
       <div class="flex-1">

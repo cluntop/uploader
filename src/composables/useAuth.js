@@ -111,7 +111,7 @@ export function useAuth() {
         token.value = userInfo.token || sessionStorage.getItem('token')
         username.value = userInfo.username || sessionStorage.getItem('username')
         userId.value = userInfo.user_id || sessionStorage.getItem('user_id')
-        avatar.value = userInfo.avatar || sessionStorage.getItem('avatar')
+        avatar.value = userInfo.avatar || sessionStorage.getItem('avatar') || ''
         isLoggedIn.value = true
         error.value = null
         console.log('用户已登录:', userInfo)
@@ -133,6 +133,39 @@ export function useAuth() {
     } catch (err) {
       console.error('更新用户状态失败:', err)
       error.value = '更新用户状态失败'
+    }
+  }
+
+  // 检查并处理头像图片
+  const checkAvatarImage = (avatarUrl) => {
+    return new Promise((resolve) => {
+      if (!avatarUrl || avatarUrl.trim() === '') {
+        resolve(false)
+        return
+      }
+
+      const img = new Image()
+      img.onload = () => {
+        resolve(true)
+      }
+      img.onerror = () => {
+        resolve(false)
+      }
+      img.src = avatarUrl
+    })
+  }
+
+  // 验证头像有效性并更新
+  const validateAvatar = async () => {
+    if (!avatar.value || avatar.value.trim() === '') {
+      return
+    }
+
+    const isValid = await checkAvatarImage(avatar.value)
+    if (!isValid) {
+      avatar.value = ''
+      sessionStorage.setItem('avatar', '')
+      console.log('头像图片无效，已设置为默认头像')
     }
   }
 
@@ -341,9 +374,10 @@ export function useAuth() {
       handleLoginCallback()
       updateUserState()
       
-      // 如果已登录，验证令牌有效性
+      // 如果已登录，验证令牌有效性和头像有效性
       if (isLoggedIn.value) {
         await validateToken()
+        await validateAvatar()
       }
     } catch (err) {
       console.error('初始化认证状态失败:', err)
@@ -364,6 +398,7 @@ export function useAuth() {
     logout,
     handleLoginCallback,
     validateToken,
+    validateAvatar,
     updateUserState,
     checkAuthStatus: authCheckAuthStatus,
     saveOriginalUrl,
