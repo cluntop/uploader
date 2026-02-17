@@ -70,13 +70,6 @@ export const getToken = () => {
       return null
     }
     
-    // 验证token格式
-    if (!token.startsWith('eyJ')) {
-      console.warn('无效的token格式')
-      removeToken()
-      return null
-    }
-    
     // 验证token是否过期
     if (isTokenExpired()) {
       console.warn('token已过期')

@@ -1,6 +1,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { BASE_URL, ERROR_CONFIG } from '../config'
 import api from '../utils/api'
+import { setToken, getToken, isAuthenticated as isAuthAuthenticated, getUserInfo as getAuthUserInfo, clearAuthInfo, checkAuthStatus as authCheckAuthStatus } from '../utils/auth'
 
 export function useAuth() {
   const token = ref('')
@@ -13,7 +14,7 @@ export function useAuth() {
 
   // 计算属性：用户是否已认证
   const isAuthenticated = computed(() => {
-    return isLoggedIn.value && token.value !== ''
+    return isAuthAuthenticated()
   })
 
   // 生成唯一 UUID
@@ -28,6 +29,12 @@ export function useAuth() {
   // 获取用户信息
   const getUserInfo = () => {
     try {
+      const userInfo = getAuthUserInfo()
+      if (userInfo) {
+        return userInfo
+      }
+      
+      // 后备方案：从 sessionStorage 直接获取
       const savedToken = sessionStorage.getItem('token')
       const savedUsername = sessionStorage.getItem('username')
       const savedUserId = sessionStorage.getItem('user_id')
@@ -51,10 +58,15 @@ export function useAuth() {
   // 保存用户信息
   const saveUserInfo = (userToken, userName, userId, userAvatar) => {
     try {
-      sessionStorage.setItem('token', userToken)
+      // 使用 auth.js 中的 setToken 函数保存 token
+      setToken(userToken)
+      
+      // 保存其他用户信息
       sessionStorage.setItem('username', userName)
       sessionStorage.setItem('user_id', userId)
       sessionStorage.setItem('avatar', userAvatar || '')
+      
+      // 更新响应式状态
       token.value = userToken
       username.value = userName
       userId.value = userId
@@ -72,10 +84,10 @@ export function useAuth() {
   // 清除用户信息
   const clearUserInfo = () => {
     try {
-      sessionStorage.removeItem('token')
-      sessionStorage.removeItem('username')
-      sessionStorage.removeItem('user_id')
-      sessionStorage.removeItem('avatar')
+      // 使用 auth.js 中的 clearAuthInfo 函数清除所有认证信息
+      clearAuthInfo()
+      
+      // 更新响应式状态
       token.value = ''
       username.value = ''
       userId.value = ''
@@ -90,32 +102,33 @@ export function useAuth() {
     }
   }
 
-  // 检查认证状态
-  const checkAuthStatus = () => {
-    try {
-      const userInfo = getUserInfo()
-      const token = sessionStorage.getItem('token')
-      return !!userInfo && !!token
-    } catch (error) {
-      console.error('检查授权状态失败:', error)
-      return false
-    }
-  }
-
   // 更新用户状态
   const updateUserState = () => {
     try {
-      const userInfo = getUserInfo()
+      // 直接使用 auth.js 中的 getAuthUserInfo 函数
+      const userInfo = getAuthUserInfo()
       if (userInfo) {
-        token.value = userInfo.token
-        username.value = userInfo.username
-        userId.value = userInfo.user_id
-        avatar.value = userInfo.avatar
+        token.value = userInfo.token || sessionStorage.getItem('token')
+        username.value = userInfo.username || sessionStorage.getItem('username')
+        userId.value = userInfo.user_id || sessionStorage.getItem('user_id')
+        avatar.value = userInfo.avatar || sessionStorage.getItem('avatar')
         isLoggedIn.value = true
         error.value = null
         console.log('用户已登录:', userInfo)
       } else {
-        console.log('用户未登录')
+        // 检查是否有 token 但没有完整用户信息
+        const tokenFromStorage = sessionStorage.getItem('token')
+        if (tokenFromStorage) {
+          token.value = tokenFromStorage
+          username.value = sessionStorage.getItem('username') || '用户'
+          userId.value = sessionStorage.getItem('user_id') || ''
+          avatar.value = sessionStorage.getItem('avatar') || ''
+          isLoggedIn.value = true
+          error.value = null
+          console.log('用户已登录（仅token）')
+        } else {
+          console.log('用户未登录')
+        }
       }
     } catch (err) {
       console.error('更新用户状态失败:', err)
@@ -180,6 +193,33 @@ export function useAuth() {
       const callbackUsername = urlParams.get('username')
       const callbackUserId = urlParams.get('user_id')
       const callbackAvatar = urlParams.get('avatar')
+      const errorParam = urlParams.get('error')
+      const errorDescription = urlParams.get('error_description')
+
+      // 处理登录错误
+      if (errorParam) {
+        console.error('登录回调错误:', errorParam, errorDescription)
+        switch (errorParam) {
+          case 'network_error':
+            error.value = '网络连接失败，请检查网络设置后重试'
+            break
+          case 'invalid_credentials':
+            error.value = '账号或密码错误，请重新输入'
+            break
+          case 'session_expired':
+            error.value = '会话已过期，请重新登录'
+            break
+          case 'permission_denied':
+            error.value = '权限不足，无法登录'
+            break
+          default:
+            error.value = errorDescription || '登录失败，请重试'
+        }
+        // 清除 URL 中的参数
+        const cleanUrl = window.location.origin + window.location.pathname
+        window.history.replaceState({}, document.title, cleanUrl)
+        return false
+      }
 
       if (callbackToken && callbackUserId) {
         console.log('检测到登录回调，保存用户信息')
@@ -201,12 +241,24 @@ export function useAuth() {
           const cleanUrl = window.location.origin + window.location.pathname
           window.history.replaceState({}, document.title, cleanUrl)
           return true
+        } else {
+          error.value = '保存用户信息失败'
+          return false
         }
+      } else {
+        console.log('登录回调参数不完整')
+        error.value = '登录回调参数不完整'
+        return false
       }
-      return false
     } catch (err) {
       console.error('处理登录回调失败:', err)
-      error.value = '处理登录回调失败'
+      if (err.name === 'TypeError') {
+        error.value = 'URL 参数解析失败'
+      } else if (err.name === 'SecurityError') {
+        error.value = '安全错误，无法处理登录回调'
+      } else {
+        error.value = '处理登录回调失败'
+      }
       return false
     }
   }
@@ -226,7 +278,13 @@ export function useAuth() {
       window.location.href = loginUrl
     } catch (err) {
       console.error('登录失败:', err)
-      error.value = ERROR_CONFIG.ERROR_MESSAGES.AUTH_ERROR
+      if (err.name === 'TypeError') {
+        error.value = '生成登录链接失败'
+      } else if (err.name === 'SecurityError') {
+        error.value = '安全错误，无法执行登录操作'
+      } else {
+        error.value = '登录失败，请重试'
+      }
     }
   }
 
@@ -237,7 +295,13 @@ export function useAuth() {
       clearUserInfo()
     } catch (err) {
       console.error('登出失败:', err)
-      error.value = '登出失败'
+      if (err.name === 'TypeError') {
+        error.value = '清除用户信息失败'
+      } else if (err.name === 'SecurityError') {
+        error.value = '安全错误，无法执行登出操作'
+      } else {
+        error.value = '登出失败，请重试'
+      }
     }
   }
 
@@ -254,7 +318,15 @@ export function useAuth() {
       return true
     } catch (err) {
       console.error('验证令牌失败:', err)
-      error.value = ERROR_CONFIG.ERROR_MESSAGES.AUTH_ERROR
+      if (err.name === 'NetworkError' || err.message.includes('网络')) {
+        error.value = '网络连接失败，无法验证令牌'
+      } else if (err.name === 'UnauthorizedError' || err.message.includes('未授权')) {
+        error.value = '令牌无效或已过期，请重新登录'
+      } else if (err.name === 'ForbiddenError' || err.message.includes('权限')) {
+        error.value = '权限不足，无法验证令牌'
+      } else {
+        error.value = '验证令牌失败，请重新登录'
+      }
       // 令牌无效，清除用户信息
       clearUserInfo()
       return false
@@ -293,7 +365,7 @@ export function useAuth() {
     handleLoginCallback,
     validateToken,
     updateUserState,
-    checkAuthStatus,
+    checkAuthStatus: authCheckAuthStatus,
     saveOriginalUrl,
     getOriginalUrl,
     clearOriginalUrl
