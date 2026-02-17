@@ -66,13 +66,26 @@ const handleResponse = async (response) => {
     // 尝试解析错误响应
     try {
       const errorData = await response.json()
-      const errorMessage = errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`
+      let errorMessage = errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`
+      
+      // 特殊处理 HTTP 422 错误
+      if (response.status === 422) {
+        errorMessage = '视频正在合成中'
+      }
+      
       const error = new Error(errorMessage)
       error.status = response.status
       error.data = errorData
       throw error
     } catch (e) {
-      const error = new Error(`HTTP ${response.status}: ${response.statusText}`)
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`
+      
+      // 特殊处理 HTTP 422 错误
+      if (response.status === 422) {
+        errorMessage = '视频正在合成中'
+      }
+      
+      const error = new Error(errorMessage)
       error.status = response.status
       throw error
     }

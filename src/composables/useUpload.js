@@ -173,6 +173,8 @@ export function useUpload() {
         throw new Error(ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR)
       } else if (error.message.includes('50')) {
         throw new Error(ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR)
+      } else if (error.message.includes('422') || error.message.includes('视频正在合成中')) {
+        throw new Error('视频正在合成中')
       } else {
         throw new Error(ERROR_CONFIG.SHOW_DETAILED_ERRORS ? error.message : ERROR_CONFIG.ERROR_MESSAGES.UPLOAD_ERROR)
       }
@@ -215,6 +217,8 @@ export function useUpload() {
         throw new Error(ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR)
       } else if (error.message.includes('50')) {
         throw new Error(ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR)
+      } else if (error.message.includes('422') || error.message.includes('视频正在合成中')) {
+        throw new Error('视频正在合成中')
       } else {
         throw new Error(ERROR_CONFIG.SHOW_DETAILED_ERRORS ? error.message : ERROR_CONFIG.ERROR_MESSAGES.UPLOAD_ERROR)
       }

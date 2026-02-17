@@ -43,6 +43,9 @@ export function useUploadToken() {
         tokenError.value = ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR
       } else if (err.message.includes('50')) {
         tokenError.value = ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR
+      } else if (err.message.includes('422') || err.message.includes('视频正在合成中')) {
+        tokenError.value = '视频正在合成中'
+        throw new Error('视频正在合成中')
       } else {
         tokenError.value = ERROR_CONFIG.SHOW_DETAILED_ERRORS ? err.message : ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR
       }
@@ -76,6 +79,9 @@ export function useUploadToken() {
         tokenError.value = ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR
       } else if (err.message.includes('50')) {
         tokenError.value = ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR
+      } else if (err.message.includes('422') || err.message.includes('视频正在合成中')) {
+        tokenError.value = '视频正在合成中'
+        throw new Error('视频正在合成中')
       } else {
         tokenError.value = ERROR_CONFIG.SHOW_DETAILED_ERRORS ? err.message : ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR
       }
