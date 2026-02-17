@@ -11,6 +11,8 @@
 
 import api from './api'
 import { API_ENDPOINTS } from '../config'
+import { isAuthenticated, getToken } from './auth'
+import { handleError, createError, ERROR_TYPES } from './errorHandler'
 
 // 识别 API 端点
 const RECOGNIZE_API = 'https://emos.prlo.de/api/recognize'
@@ -329,13 +331,12 @@ const searchItemId = async (filename, logger = console) => {
   logger.log(`开始搜刮: ${filename}`)
   
   // 检查认证状态
-  const token = sessionStorage.getItem('token')
-  if (!token) {
+  const token = getToken()
+  if (!isAuthenticated() || !token) {
     logger.error('未登录，无法搜索视频')
     steps.push({ name: '认证检查', status: '失败', message: '未登录，无法搜索视频' })
-    const error = new Error('未登录，无法搜索视频')
+    const error = createError('未登录，无法搜索视频', ERROR_TYPES.NOT_LOGGED_IN)
     error.steps = steps
-    error.type = 'auth_required'
     throw error
   }
   steps.push({ name: '认证检查', status: '成功', message: '已登录，可以搜索视频' })
@@ -492,9 +493,8 @@ const searchItemId = async (filename, logger = console) => {
     if (!searchTitle || searchTitle.trim() === '') {
       logger.error('搜索标题为空，无法搜索视频')
       steps.push({ name: '标题验证', status: '失败', message: '搜索标题为空，无法搜索视频' })
-      const error = new Error('搜索标题为空，无法搜索视频')
+      const error = createError('搜索标题为空，无法搜索视频', ERROR_TYPES.VALIDATION_ERROR)
       error.steps = steps
-      error.type = 'empty_title'
       throw error
     } else {
       logger.log(`使用原始文件名作为搜索标题: ${searchTitle}`)
@@ -595,9 +595,8 @@ const searchItemId = async (filename, logger = console) => {
             steps.push({ name: '剧集定位', status: '失败', message: `剧集定位失败: ${e.message}` })
           }
           
-          const error = new Error(`无法定位 S${season}E${episode}`)
+          const error = createError(`无法定位 S${season}E${episode}`, ERROR_TYPES.RESOURCE_NOT_FOUND)
           error.steps = steps
-          error.type = 'episode_not_found'
           throw error
         }
       }
@@ -634,9 +633,8 @@ const searchItemId = async (filename, logger = console) => {
     errorMessage += ' (未找到相关视频信息)'
   }
   
-  const error = new Error(errorMessage)
+  const error = createError(errorMessage, ERROR_TYPES.RESOURCE_NOT_FOUND)
   error.steps = steps
-  error.type = 'recognition_failed'
   throw error
 }
 

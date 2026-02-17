@@ -9,6 +9,8 @@
  * Copyright (c) 2026 by flkGit, All Rights Reserved.
  */
 import { BASE_URL } from '../config'
+import { getToken } from './auth'
+import { handleError, createErrorFromResponse, createErrorFromNetwork } from './errorHandler'
 
 // 缓存对象
 const cache = new Map()
@@ -42,24 +44,7 @@ const isCacheValid = (cachedData) => {
 
 // 获取认证令牌
 const getAuthToken = () => {
-  try {
-    const token = sessionStorage.getItem('token')
-    if (!token) {
-      return null
-    }
-    
-    // 验证令牌格式
-    if (!token.startsWith('eyJ')) {
-      console.warn('无效的令牌格式')
-      sessionStorage.removeItem('token')
-      return null
-    }
-    
-    return token
-  } catch (e) {
-    console.error('获取令牌失败:', e)
-    return null
-  }
+  return getToken()
 }
 
 // 构建请求选项
@@ -94,28 +79,20 @@ const handleResponse = async (response) => {
     // 尝试解析错误响应
     try {
       const errorData = await response.json()
-      let errorMessage = errorData.message || errorData.error || errorData.msg || `HTTP ${response.status}: ${response.statusText}`
-      
       // 特殊处理 HTTP 422 错误
       if (response.status === 422) {
-        errorMessage = '视频正在合成中'
+        errorData.message = '视频正在合成中'
       }
-      
-      const error = new Error(errorMessage)
-      error.status = response.status
-      error.data = errorData
-      error.code = errorData.code || errorData.error_code
+      const error = createErrorFromResponse(response, errorData)
       throw error
     } catch (e) {
-      let errorMessage = `HTTP ${response.status}: ${response.statusText}`
-      
       // 特殊处理 HTTP 422 错误
       if (response.status === 422) {
-        errorMessage = '视频正在合成中'
+        const errorData = { message: '视频正在合成中' }
+        const error = createErrorFromResponse(response, errorData)
+        throw error
       }
-      
-      const error = new Error(errorMessage)
-      error.status = response.status
+      const error = createErrorFromResponse(response)
       throw error
     }
   }
@@ -158,21 +135,18 @@ const retryRequest = async (url, options, attempt = 1) => {
   } catch (error) {
     console.error(`API 请求失败 (${attempt}/${RETRY_CONFIG.maxAttempts}):`, error)
     
-    // 检查是否是超时错误
-    if (error.name === 'AbortError') {
-      console.error('API 请求超时')
-      throw new Error('请求超时，请检查网络连接')
-    }
+    // 处理错误
+    const handledError = handleError(error, `API 请求: ${url}`)
     
     // 只对网络错误或 5xx 错误进行重试
     if (attempt < RETRY_CONFIG.maxAttempts && 
-        (error.message.includes('Network') || error.message.includes('Failed to fetch') || error.status >= 500 || error.message.includes('50') || error.message.includes('timeout'))) {
+        (handledError.type === 'network_error' || handledError.type === 'timeout_error' || handledError.type === 'system_error' || handledError.status >= 500)) {
       const delay = RETRY_CONFIG.delay * Math.pow(RETRY_CONFIG.backoff, attempt - 1)
       console.log(`正在重试 (${attempt}/${RETRY_CONFIG.maxAttempts})，延迟 ${delay}ms...`)
       await new Promise(resolve => setTimeout(resolve, delay))
       return retryRequest(url, options, attempt + 1)
     }
-    throw error
+    throw handledError
   }
 }
 

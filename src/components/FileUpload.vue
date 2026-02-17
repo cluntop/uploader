@@ -275,6 +275,8 @@
 import { ref } from 'vue'
 import UploadSummary from './UploadSummary.vue'
 import { searchItemId } from '../utils/recognize'
+import { isAuthenticated } from '../utils/auth'
+import { getUserFriendlyMessage } from '../utils/errorHandler'
 
 const props = defineProps({
   videoId: {
@@ -487,7 +489,7 @@ const recognizeFile = async (file) => {
     return result
   } catch (error) {
     console.error('识别失败:', error)
-    recognitionError.value = error.message || '识别失败，请重试'
+    recognitionError.value = getUserFriendlyMessage(error) || '识别失败，请重试'
     recognitionSteps.value.push({ name: '识别失败', status: '失败', message: error.message || '识别失败' })
     return null
   } finally {
@@ -520,7 +522,7 @@ const resetRecognition = () => {
 
 // 重试识别
 const retryRecognition = async () => {
-  if (!props.isLoggedIn) {
+  if (!isAuthenticated() || !props.isLoggedIn) {
     recognitionError.value = '未登录，无法搜索视频，请先登录后再重试'
     return
   }

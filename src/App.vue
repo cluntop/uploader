@@ -8,11 +8,16 @@
     />
 
     <div class="bg-white rounded-xl shadow-2xl p-10 max-w-5xl w-full">
-      <h1 class="text-gray-800 mb-2 text-2xl font-bold">
-        EMOS emby公益服 视频上传服务
-        <small class="text-gray-400">v0.0.1</small>
-      </h1>
-      <p class="text-gray-600 mb-8 text-sm">支持上传到 Microsoft OneDrive</p>
+      <div class="flex justify-between items-center mb-8">
+        <div>
+          <h1 class="text-gray-800 mb-2 text-2xl font-bold">
+            EMOS emby公益服 视频上传服务
+            <small class="text-gray-400">v0.0.1</small>
+          </h1>
+          <p class="text-gray-600 text-sm">支持上传到 Microsoft OneDrive</p>
+        </div>
+        <LoginButton />
+      </div>
 
       <!-- 用户信息和视频信息左右布局 -->
       <div class="mb-6">
@@ -68,16 +73,18 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import StatusMessage from './components/StatusMessage.vue'
 import UserPanel from './components/UserPanel.vue'
 import VideoInfo from './components/VideoInfo.vue'
 import FileUpload from './components/FileUpload.vue'
+import LoginButton from './components/LoginButton.vue'
 import { useAuth } from './composables/useAuth'
 import { useVideoInfo } from './composables/useVideoInfo'
 import { useUpload } from './composables/useUpload'
 import { useUploadToken } from './composables/useUploadToken'
 import { useNotification } from './composables/useNotification'
+import { checkAuthStatus, handleCallbackWithRedirect } from './utils/auth'
 
 // 初始化所有 composables
 const auth = useAuth()
@@ -561,8 +568,45 @@ const handleContinueUpload = () => {
 }
 
 // 处理登录回调后显示成功消息
-const loginCallbackHandled = auth.handleLoginCallback()
+const handleAuthCallbackInApp = () => {
+  try {
+    const urlParams = new URLSearchParams(window.location.search)
+    const user_id = urlParams.get('user_id')
+    const username = urlParams.get('username')
+    const avatar = urlParams.get('avatar')
+    const token = urlParams.get('token')
+    
+    if (user_id && token) {
+      const userInfo = {
+        user_id,
+        username,
+        avatar,
+        token
+      }
+      handleCallbackWithRedirect(userInfo)
+      // 清除URL参数，避免刷新页面时重复处理
+      window.history.replaceState({}, document.title, window.location.pathname)
+      return true
+    }
+    return false
+  } catch (error) {
+    console.error('处理授权回调失败:', error)
+    return false
+  }
+}
+
+const loginCallbackHandled = handleAuthCallbackInApp()
 if (loginCallbackHandled) {
   notification.showStatus('登录成功！', 'success')
 }
+
+onMounted(() => {
+  // 检查认证状态
+  const isAuthorized = checkAuthStatus()
+  if (isAuthorized) {
+    console.log('用户已授权，应用正常加载')
+  } else {
+    console.log('用户未授权，等待授权流程')
+  }
+})
 </script>
