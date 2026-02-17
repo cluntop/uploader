@@ -21,7 +21,7 @@
     <!-- 已登录状态 -->
     <div v-else class="flex items-center gap-4 text-white">
       <div class="bg-white/30 w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-sm overflow-hidden">
-        <img src="../assets/avatar.png" alt="用户头像" class="w-full h-full object-cover" />
+        <img :src="avatar || '../assets/avatar.png'" alt="用户头像" class="w-full h-full object-cover" />
       </div>
       <div class="flex-1">
         <div class="text-base font-semibold">{{ username }}</div>
@@ -49,6 +49,10 @@ const props = defineProps({
     default: false
   },
   username: {
+    type: String,
+    default: ''
+  },
+  avatar: {
     type: String,
     default: ''
   },

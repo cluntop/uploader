@@ -39,17 +39,7 @@
   color: #4cbfaa;
 }
 
-.video-info-item {
-  margin-bottom: 8px;
-  padding: 8px 12px;
-  background: white;
-  border-radius: 6px;
-}
 
-.video-info-item strong {
-  color: #4cbfaa;
-  margin-right: 8px;
-}
 
 .video-info-error {
   color: #f44336;
