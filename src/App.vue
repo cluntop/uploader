@@ -25,7 +25,6 @@
         <UserPanel
           :is-logged-in="auth.isLoggedIn.value"
           :username="auth.username.value"
-          :avatar="auth.avatar.value"
           :is-uploading="upload.isUploading.value"
           :is-saving="isSaving"
           @logout="handleLogout"

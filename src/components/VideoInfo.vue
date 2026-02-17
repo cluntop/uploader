@@ -57,14 +57,12 @@
         </div>
 
         <!-- 视频信息 -->
-        <div v-else-if="videoInfo" class="space-y-2">
-          <div class="flex items-start gap-2">
-            <strong class="text-teal-600">视频ID:</strong>
-            <span>{{ videoInfo.id || localVideoId }}</span>
+        <div v-else-if="videoInfo">
+          <div class="video-info-item">
+            <strong>视频ID:</strong> {{ videoInfo.id || localVideoId }}
           </div>
-          <div class="flex items-start gap-2">
-            <strong class="text-teal-600">视频名称:</strong>
-            <span>{{ videoInfo.title || '未知' }}</span>
+          <div class="video-info-item">
+            <strong>视频名称:</strong> {{ videoInfo.title || '未知' }}
           </div>
         </div>
 
