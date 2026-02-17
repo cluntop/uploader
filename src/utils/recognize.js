@@ -623,7 +623,18 @@ const searchItemId = async (filename, logger = console) => {
   }
   
   logger.log('最终无结果')
-  const error = new Error('识别失败 (详情见日志)')
+  
+  // 分析失败原因，提供更详细的错误信息
+  const lastStep = steps[steps.length - 1]
+  let errorMessage = '识别失败'
+  
+  if (lastStep && lastStep.message) {
+    errorMessage += `: ${lastStep.message}`
+  } else {
+    errorMessage += ' (未找到相关视频信息)'
+  }
+  
+  const error = new Error(errorMessage)
   error.steps = steps
   error.type = 'recognition_failed'
   throw error

@@ -520,6 +520,11 @@ const resetRecognition = () => {
 
 // 重试识别
 const retryRecognition = async () => {
+  if (!props.isLoggedIn) {
+    recognitionError.value = '未登录，无法搜索视频，请先登录后再重试'
+    return
+  }
+  
   if (selectedFile.value) {
     await recognizeFile(selectedFile.value)
   }
@@ -566,6 +571,12 @@ const processFile = async (file) => {
     emit('fileSelected', null, null, `错误：只能上传${typeLabel}文件！`)
     return
   }
+
+  // 重置识别状态，确保每次选择文件都重新开始识别
+  recognitionResult.value = null
+  recognitionError.value = null
+  recognitionSteps.value = []
+  showErrorDetails.value = false
 
   selectedFile.value = file
 

@@ -68,13 +68,13 @@ export function useVideoInfo() {
       console.error('获取视频信息失败:', err)
       // 处理错误消息
       if (err.message.includes('401')) {
-        error.value = ERROR_CONFIG.ERROR_MESSAGES.AUTH_ERROR
+        error.value = '认证失败，请重新登录'
       } else if (err.message.includes('Network') || err.message.includes('Failed to fetch')) {
-        error.value = ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR
+        error.value = '网络连接失败，请检查网络设置'
       } else if (err.message.includes('50')) {
-        error.value = ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR
+        error.value = '服务器错误，请稍后重试'
       } else {
-        error.value = ERROR_CONFIG.SHOW_DETAILED_ERRORS ? err.message : ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR
+        error.value = '获取视频信息失败: 请确保视频 ID 正确，且 API 端点已正确配置'
       }
       return false
     } finally {
