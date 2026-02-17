@@ -85,12 +85,22 @@
         <div class="text-gray-500 text-xs mb-2">
           {{ recognitionStep }}
         </div>
-        <div class="w-full bg-gray-200 rounded-full h-2.5">
+        <div class="w-full bg-gray-200 rounded-full h-2.5 mb-3">
           <div 
             class="bg-teal-600 h-2.5 rounded-full transition-all duration-300" 
             :style="{ width: recognitionProgress + '%' }"
           ></div>
         </div>
+        <div class="flex justify-between text-xs text-gray-500 mb-2">
+          <span>{{ recognitionProgress }}%</span>
+          <span>{{ recognitionSteps.length > 0 ? recognitionSteps[recognitionSteps.length - 1]?.name : '准备中' }}</span>
+        </div>
+        <button 
+          @click="cancelRecognition"
+          class="text-xs text-gray-600 hover:text-gray-800 px-3 py-1 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+        >
+          🚫 取消识别
+        </button>
       </div>
       <div v-else class="upload-area">
         <div class="text-5xl mb-2.5">📁</div>
@@ -326,7 +336,9 @@ const recognitionProgress = ref(0)
 const recognitionStep = ref('')
 const recognitionResult = ref(null)
 const recognitionError = ref(null)
+const recognitionSteps = ref([])
 const showErrorDetails = ref(false)
+const recognitionAbortController = ref(null)
 
 // 获取上传类型标签
 const getUploadTypeLabel = () => {
@@ -408,11 +420,17 @@ const recognizeFile = async (file) => {
   recognitionProgress.value = 0
   recognitionStep.value = '分析文件名...'
   recognitionError.value = null
+  recognitionSteps.value = []
+  recognitionAbortController.value = new AbortController()
 
   try {
     // 模拟识别进度
     let progress = 0
     const progressInterval = setInterval(() => {
+      if (recognitionAbortController.value.signal.aborted) {
+        clearInterval(progressInterval)
+        return
+      }
       progress += 5
       recognitionProgress.value = progress
       if (progress >= 90) {
@@ -427,12 +445,22 @@ const recognizeFile = async (file) => {
         console.log(message)
         if (message.includes('API 识别成功')) {
           recognitionStep.value = 'API 识别成功，处理结果...'
+          recognitionSteps.value.push({ name: 'API 识别', status: '成功', message: 'API 识别成功' })
         } else if (message.includes('正则')) {
           recognitionStep.value = '使用正则表达式识别...'
+          recognitionSteps.value.push({ name: '正则识别', status: '开始', message: '使用正则表达式识别' })
         } else if (message.includes('搜索')) {
           recognitionStep.value = '搜索视频信息...'
+          recognitionSteps.value.push({ name: '视频搜索', status: '开始', message: '搜索视频信息' })
         } else if (message.includes('精准定位')) {
           recognitionStep.value = '精准定位视频...'
+          recognitionSteps.value.push({ name: '精准定位', status: '开始', message: '精准定位视频' })
+        } else if (message.includes('缓存命中')) {
+          recognitionStep.value = '缓存命中，直接使用结果...'
+          recognitionSteps.value.push({ name: '缓存检查', status: '成功', message: '缓存命中' })
+        } else if (message.includes('手动映射命中')) {
+          recognitionStep.value = '手动映射命中，直接使用结果...'
+          recognitionSteps.value.push({ name: '手动映射', status: '成功', message: '手动映射命中' })
         }
       },
       error: (message) => {
@@ -443,6 +471,7 @@ const recognizeFile = async (file) => {
     clearInterval(progressInterval)
     recognitionProgress.value = 100
     recognitionStep.value = '识别完成'
+    recognitionSteps.value.push({ name: '识别完成', status: '成功', message: '识别成功' })
 
     recognitionResult.value = result
     emit('recognitionComplete', result)
@@ -451,6 +480,7 @@ const recognizeFile = async (file) => {
   } catch (error) {
     console.error('识别失败:', error)
     recognitionError.value = error.message || '识别失败，请重试'
+    recognitionSteps.value.push({ name: '识别失败', status: '失败', message: error.message || '识别失败' })
     return null
   } finally {
     isRecognizing.value = false
@@ -458,10 +488,24 @@ const recognizeFile = async (file) => {
   }
 }
 
+// 取消识别
+const cancelRecognition = () => {
+  if (recognitionAbortController.value) {
+    recognitionAbortController.value.abort()
+  }
+  isRecognizing.value = false
+  recognitionProgress.value = 0
+  recognitionStep.value = ''
+  recognitionError.value = '识别已取消'
+  recognitionSteps.value.push({ name: '识别取消', status: '取消', message: '用户取消了识别' })
+}
+
 // 重置识别状态
 const resetRecognition = () => {
   recognitionResult.value = null
   recognitionError.value = null
+  recognitionSteps.value = []
+  recognitionAbortController.value = null
   selectedFile.value = null
   emit('fileSelected', null, uploadType.value, null, idInputMode.value)
 }
@@ -554,6 +598,8 @@ const resetFile = () => {
   selectedFile.value = null
   recognitionResult.value = null
   recognitionError.value = null
+  recognitionSteps.value = []
+  recognitionAbortController.value = null
 }
 
 defineExpose({

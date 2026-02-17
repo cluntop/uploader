@@ -334,7 +334,8 @@ const handleStartUpload = async (file, uploadType, idMode = 'manual', recognitio
     // 手动模式：先获取 token，成功后立即上传
     notification.showStatus('正在获取上传令牌...', 'uploading')
 
-    await uploadToken.getUploadToken(
+    // 使用带重试功能的函数，处理视频正在合成中的情况
+    await uploadToken.getUploadTokenWithRetry(
       uploadType,
       file.type,
       file.name,
@@ -409,7 +410,8 @@ const saveUploadedFile = async () => {
     const itemType = match[1]
     const itemId = match[2]
 
-    const saveResult = await uploadToken.saveUploadResult(
+    // 使用带重试功能的函数，处理视频正在合成中的情况
+    const saveResult = await uploadToken.saveUploadResultWithRetry(
       uploadedFileInfo.value.fileId,
       itemType,
       itemId

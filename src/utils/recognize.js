@@ -18,6 +18,10 @@ const RECOGNIZE_API = 'https://emos.prlo.de/api/recognize'
 // 手动映射存储
 const MANUAL_MAP_KEY = 'manual_map'
 
+// 识别结果缓存
+const RECOGNITION_CACHE_KEY = 'recognition_cache'
+const CACHE_EXPIRY_TIME = 7 * 24 * 60 * 60 * 1000 // 7天
+
 // 获取手动映射
 const getManualMap = () => {
   try {
@@ -50,6 +54,70 @@ const clearManualMap = (filename) => {
   const map = getManualMap()
   delete map[filename]
   saveManualMap(map)
+}
+
+// 获取识别缓存
+const getRecognitionCache = () => {
+  try {
+    const saved = sessionStorage.getItem(RECOGNITION_CACHE_KEY)
+    if (saved) {
+      const cache = JSON.parse(saved)
+      // 清除过期缓存
+      const now = Date.now()
+      const validCache = {}
+      Object.keys(cache).forEach(key => {
+        if (cache[key].timestamp + CACHE_EXPIRY_TIME > now) {
+          validCache[key] = cache[key]
+        }
+      })
+      // 保存清理后的缓存
+      if (Object.keys(validCache).length !== Object.keys(cache).length) {
+        sessionStorage.setItem(RECOGNITION_CACHE_KEY, JSON.stringify(validCache))
+      }
+      return validCache
+    }
+    return {}
+  } catch (e) {
+    console.error('获取识别缓存失败:', e)
+    return {}
+  }
+}
+
+// 保存识别缓存
+const saveRecognitionCache = (cache) => {
+  try {
+    sessionStorage.setItem(RECOGNITION_CACHE_KEY, JSON.stringify(cache))
+  } catch (e) {
+    console.error('保存识别缓存失败:', e)
+  }
+}
+
+// 添加识别结果到缓存
+const addToRecognitionCache = (filename, result) => {
+  const cache = getRecognitionCache()
+  cache[filename] = {
+    result,
+    timestamp: Date.now()
+  }
+  saveRecognitionCache(cache)
+}
+
+// 从缓存获取识别结果
+const getFromRecognitionCache = (filename) => {
+  const cache = getRecognitionCache()
+  return cache[filename]?.result || null
+}
+
+// 清除识别缓存
+const clearRecognitionCache = (filename = null) => {
+  const cache = getRecognitionCache()
+  if (filename) {
+    delete cache[filename]
+  } else {
+    // 清除所有缓存
+    return sessionStorage.removeItem(RECOGNITION_CACHE_KEY)
+  }
+  saveRecognitionCache(cache)
 }
 
 // 搜索视频 ID
@@ -187,18 +255,47 @@ const getMediaList = async (params, logger = console) => {
 }
 
 // 外部 API 识别
-const recognizeByApi = async (filename, logger = console) => {
-  try {
-    logger.log(`调用外部 API 识别: ${filename}`)
-    const response = await fetch(`${RECOGNIZE_API}?path=${encodeURIComponent(filename)}`)
-    logger.log(`API 响应状态: ${response.status}`)
-    const data = await response.json()
-    logger.log(`API 识别结果:`, data)
-    return data
-  } catch (e) {
-    logger.error('API 识别失败:', e)
-    return null
+const recognizeByApi = async (filename, logger = console, maxRetries = 3, retryDelay = 1000) => {
+  let retries = 0
+  
+  while (retries < maxRetries) {
+    try {
+      logger.log(`调用外部 API 识别 (${retries + 1}/${maxRetries}): ${filename}`)
+      
+      // 添加超时设置
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000) // 5秒超时
+      
+      const response = await fetch(`${RECOGNIZE_API}?path=${encodeURIComponent(filename)}`, {
+        signal: controller.signal
+      })
+      
+      clearTimeout(timeoutId)
+      logger.log(`API 响应状态: ${response.status}`)
+      
+      if (!response.ok) {
+        throw new Error(`API 响应错误: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      logger.log(`API 识别结果:`, data)
+      return data
+    } catch (e) {
+      retries++
+      logger.error(`API 识别失败 (${retries}/${maxRetries}):`, e)
+      
+      if (retries >= maxRetries) {
+        logger.error('达到最大重试次数，API 识别失败')
+        return null
+      }
+      
+      // 等待一段时间后重试
+      logger.log(`等待 ${retryDelay}ms 后重试...`)
+      await new Promise(resolve => setTimeout(resolve, retryDelay))
+    }
   }
+  
+  return null
 }
 
 // 正则表达式识别
@@ -209,16 +306,15 @@ const recognizeByRegex = (filename, logger = console) => {
   let season = 1
   let episode = 1
   
-  // 匹配 SxxExx 格式
-  const seMatch = /S(\d+)\s*E(\d+)/i.exec(parseName)
+  // 匹配 SxxExx 格式（支持多种变体）
+  const seMatch = /S(\d{1,3})\s*[E-]\s*(\d{1,3})/i.exec(parseName)
   if (seMatch) {
     searchType = 'tv'
     season = parseInt(seMatch[1])
     episode = parseInt(seMatch[2])
     // 提取标题，处理各种分隔符
     searchTitle = parseName.substring(0, seMatch.index)
-      .replace(/\./g, ' ')  // 替换点为空格
-      .replace(/_/g, ' ')  // 替换下划线为空格
+      .replace(/\.|_/g, ' ')  // 替换点和下划线为空格
       .replace(/\s+/g, ' ')  // 合并多个空格
       .trim()
     // 移除常见的标记
@@ -234,8 +330,7 @@ const recognizeByRegex = (filename, logger = console) => {
       season = parseInt(episodeMatch[1])
       episode = parseInt(episodeMatch[2])
       searchTitle = parseName.substring(0, episodeMatch.index)
-        .replace(/\./g, ' ')  // 替换点为空格
-        .replace(/_/g, ' ')  // 替换下划线为空格
+        .replace(/\.|_/g, ' ')  // 替换点和下划线为空格
         .replace(/\s+/g, ' ')  // 合并多个空格
         .trim()
       // 移除常见的标记
@@ -249,14 +344,47 @@ const recognizeByRegex = (filename, logger = console) => {
     searchType = 'tv'
     // 提取标题，移除日期部分
     searchTitle = parseName.replace(/\d{4}[.-]\d{1,2}[.-]\d{1,2}/, '')
-      .replace(/\./g, ' ')  // 替换点为空格
-      .replace(/_/g, ' ')  // 替换下划线为空格
+      .replace(/\.|_/g, ' ')  // 替换点和下划线为空格
       .replace(/\s+/g, ' ')  // 合并多个空格
       .trim()
     // 移除常见的标记
     searchTitle = searchTitle.replace(/\[.*?\]/g, '').trim()
     searchTitle = searchTitle.replace(/\(.*?\)/g, '').trim()
     logger.log(`正则 TV Date: ${searchTitle}`)
+  }
+  // 匹配 season x episode y 格式
+  else if (/season\s*(\d+)\s*episode\s*(\d+)/i.test(parseName)) {
+    const seasonEpisodeMatch = /season\s*(\d+)\s*episode\s*(\d+)/i.exec(parseName)
+    if (seasonEpisodeMatch) {
+      searchType = 'tv'
+      season = parseInt(seasonEpisodeMatch[1])
+      episode = parseInt(seasonEpisodeMatch[2])
+      searchTitle = parseName.substring(0, seasonEpisodeMatch.index)
+        .replace(/\.|_/g, ' ')  // 替换点和下划线为空格
+        .replace(/\s+/g, ' ')  // 合并多个空格
+        .trim()
+      // 移除常见的标记
+      searchTitle = searchTitle.replace(/\[.*?\]/g, '').trim()
+      searchTitle = searchTitle.replace(/\(.*?\)/g, '').trim()
+      logger.log(`正则 TV (Season x Episode y): ${searchTitle} S${season}E${episode}`)
+    }
+  }
+  // 匹配第x季第x集格式
+  else if (/第(\d+)季第(\d+)集/.test(parseName)) {
+    const chineseMatch = /第(\d+)季第(\d+)集/.exec(parseName)
+    if (chineseMatch) {
+      searchType = 'tv'
+      season = parseInt(chineseMatch[1])
+      episode = parseInt(chineseMatch[2])
+      searchTitle = parseName.substring(0, chineseMatch.index)
+        .replace(/\.|_/g, ' ')  // 替换点和下划线为空格
+        .replace(/\s+/g, ' ')  // 合并多个空格
+        .trim()
+      // 移除常见的标记
+      searchTitle = searchTitle.replace(/\[.*?\]/g, '').trim()
+      searchTitle = searchTitle.replace(/\(.*?\)/g, '').trim()
+      logger.log(`正则 TV (中文格式): ${searchTitle} S${season}E${episode}`)
+    }
   }
   // 电影格式
   else {
@@ -273,15 +401,13 @@ const recognizeByRegex = (filename, logger = console) => {
     if (yearMatch) {
       // 如果找到年份，移除年份及后面的内容
       searchTitle = tempName.substring(0, yearMatch.index)
-        .replace(/\./g, ' ')  // 替换点为空格
-        .replace(/_/g, ' ')  // 替换下划线为空格
+        .replace(/\.|_/g, ' ')  // 替换点和下划线为空格
         .replace(/\s+/g, ' ')  // 合并多个空格
         .trim()
     } else {
       // 如果没有找到年份，使用整个文件名
       searchTitle = tempName
-        .replace(/\./g, ' ')  // 替换点为空格
-        .replace(/_/g, ' ')  // 替换下划线为空格
+        .replace(/\.|_/g, ' ')  // 替换点和下划线为空格
         .replace(/\s+/g, ' ')  // 合并多个空格
         .trim()
     }
@@ -290,14 +416,14 @@ const recognizeByRegex = (filename, logger = console) => {
     searchTitle = searchTitle
       .replace(/\b(HD|1080p|720p|480p|2160p|UHD|BluRay|DVD|WEB-DL|WEBRip|HDRip|BDRip|DVDRip)\b/gi, '')
       .replace(/\b(AC3|DTS|x264|x265|HEVC|AAC|MP3)\b/gi, '')
+      .replace(/\b(MULTi|DUBBED|SUBBED|UNCUT|DIRECTORS|CUT)\b/gi, '')
       .replace(/\s+/g, ' ')
       .trim()
     
     // 增强鲁棒性：如果搜索标题为空，使用原始文件名
     if (!searchTitle || searchTitle.trim() === '') {
       searchTitle = parseName
-        .replace(/\./g, ' ')  // 替换点为空格
-        .replace(/_/g, ' ')  // 替换下划线为空格
+        .replace(/\.|_/g, ' ')  // 替换点和下划线为空格
         .replace(/\s+/g, ' ')  // 合并多个空格
         .trim()
     }
@@ -337,6 +463,16 @@ const searchItemId = async (filename, logger = console) => {
   }
   steps.push({ name: '认证检查', status: '成功', message: '已登录，可以搜索视频' })
   
+  // 检查缓存
+  steps.push({ name: '缓存检查', status: '开始', message: '检查是否有缓存的识别结果' })
+  const cachedResult = getFromRecognitionCache(filename)
+  if (cachedResult) {
+    logger.log(`缓存命中: ID ${cachedResult.video_id}`)
+    steps.push({ name: '缓存检查', status: '成功', message: `找到缓存结果: ID ${cachedResult.video_id}` })
+    return cachedResult
+  }
+  steps.push({ name: '缓存检查', status: '失败', message: '未找到缓存结果' })
+  
   // 检查手动映射
   steps.push({ name: '手动映射检查', status: '开始', message: '检查是否有手动映射' })
   const manualMap = getManualMap()
@@ -344,12 +480,15 @@ const searchItemId = async (filename, logger = console) => {
     const m = manualMap[filename]
     logger.log(`手动映射命中: ID ${m.video_id}`)
     steps.push({ name: '手动映射检查', status: '成功', message: `找到手动映射: ID ${m.video_id}` })
-    return {
+    const result = {
       video_id: m.video_id,
       item_type: m.item_type || 'vl',
       title: 'Manual Link',
       media_uuid: m.media_uuid || null
     }
+    // 保存到缓存
+    addToRecognitionCache(filename, result)
+    return result
   }
   steps.push({ name: '手动映射检查', status: '失败', message: '未找到手动映射' })
   
@@ -430,23 +569,29 @@ const searchItemId = async (filename, logger = console) => {
       if (searchType === 'tv') {
         if (result.episode_info && result.episode_info.item_id) {
           steps.push({ name: '精准定位', status: '成功', message: `找到剧集: ${result.video_title} S${season}E${episode}` })
-          return {
+          const returnResult = {
             video_id: result.episode_info.item_id,
             item_type: 've',
             title: `${result.video_title} S${season}E${episode}`,
             media_uuid: null
           }
+          // 保存到缓存
+          addToRecognitionCache(filename, returnResult)
+          return returnResult
         }
         steps.push({ name: '精准定位', status: '失败', message: `未找到剧集 S${season}E${episode}` })
       } else {
         if (result.item_id) {
           steps.push({ name: '精准定位', status: '成功', message: `找到电影: ${result.video_title}` })
-          return {
+          const returnResult = {
             video_id: result.item_id,
             item_type: 'vl',
             title: result.video_title,
             media_uuid: null
           }
+          // 保存到缓存
+          addToRecognitionCache(filename, returnResult)
+          return returnResult
         }
         steps.push({ name: '精准定位', status: '失败', message: '未找到对应的视频' })
       }
@@ -539,23 +684,29 @@ const searchItemId = async (filename, logger = console) => {
           if (searchType === 'tv') {
             if (tmdbResult.episode_info && tmdbResult.episode_info.item_id) {
               steps.push({ name: 'TMDB 定位', status: '成功', message: `找到剧集: ${tmdbResult.video_title} S${season}E${episode}` })
-              return {
+              const returnResult = {
                 video_id: tmdbResult.episode_info.item_id,
                 item_type: 've',
                 title: `${tmdbResult.video_title} S${season}E${episode}`,
                 media_uuid: null
               }
+              // 保存到缓存
+              addToRecognitionCache(filename, returnResult)
+              return returnResult
             }
             steps.push({ name: 'TMDB 定位', status: '失败', message: `未找到剧集 S${season}E${episode}` })
           } else {
             if (tmdbResult.item_id) {
               steps.push({ name: 'TMDB 定位', status: '成功', message: `找到电影: ${tmdbResult.video_title}` })
-              return {
+              const returnResult = {
                 video_id: tmdbResult.item_id,
                 item_type: 'vl',
                 title: tmdbResult.video_title,
                 media_uuid: null
               }
+              // 保存到缓存
+              addToRecognitionCache(filename, returnResult)
+              return returnResult
             }
             steps.push({ name: 'TMDB 定位', status: '失败', message: '未找到对应的视频' })
           }
@@ -579,12 +730,15 @@ const searchItemId = async (filename, logger = console) => {
             const retryResult = await getVideoId(retryParams, logger)
             if (retryResult.episode_info) {
               steps.push({ name: '剧集定位', status: '成功', message: `找到剧集: ${retryResult.episode_info.episode_title}` })
-              return {
+              const returnResult = {
                 video_id: retryResult.episode_info.item_id,
                 item_type: 've',
                 title: retryResult.episode_info.episode_title,
                 media_uuid: null
               }
+              // 保存到缓存
+              addToRecognitionCache(filename, returnResult)
+              return returnResult
             }
             steps.push({ name: '剧集定位', status: '失败', message: `未找到剧集 S${season}E${episode}` })
           } catch (e) {
@@ -601,12 +755,15 @@ const searchItemId = async (filename, logger = console) => {
       
       if (searchType === 'movie' || first.video_type === 'vl') {
         steps.push({ name: '视频匹配', status: '成功', message: `匹配到视频: ${first.video_title}` })
-        return {
+        const returnResult = {
           video_id: first.video_id,
           item_type: 'vl',
           title: first.video_title,
           media_uuid: null
         }
+        // 保存到缓存
+        addToRecognitionCache(filename, returnResult)
+        return returnResult
       }
     } else {
       logger.error('未找到相关视频')
@@ -632,5 +789,9 @@ export {
   clearManualMap,
   getManualMap,
   getVideoTree,
-  getMediaList
+  getMediaList,
+  getRecognitionCache,
+  addToRecognitionCache,
+  getFromRecognitionCache,
+  clearRecognitionCache
 }

@@ -7,3 +7,5 @@ pnpm-lock.yaml
 .env.local
 
 .trae
+
+package-lock.json

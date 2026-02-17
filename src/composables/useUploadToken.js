@@ -7,6 +7,34 @@ export function useUploadToken() {
   const isGettingToken = ref(false)
   const tokenError = ref(null)
 
+  // 带重试的获取上传令牌
+  const getUploadTokenWithRetry = async (type, fileType, fileName, fileSize, fileStorage = 'default', maxRetries = 5, retryDelay = 30000) => {
+    let retries = 0
+    
+    while (retries < maxRetries) {
+      try {
+        return await getUploadToken(type, fileType, fileName, fileSize, fileStorage)
+      } catch (err) {
+        // 只有视频正在合成中的错误才重试
+        if (err.message.includes('视频正在合成中')) {
+          retries++
+          console.log(`视频正在合成中，${retries}秒后重试 (${retries}/${maxRetries})...`)
+          
+          if (retries >= maxRetries) {
+            console.error('达到最大重试次数，获取上传令牌失败')
+            throw err
+          }
+          
+          // 等待一段时间后重试
+          await new Promise(resolve => setTimeout(resolve, retryDelay))
+        } else {
+          // 其他错误直接抛出
+          throw err
+        }
+      }
+    }
+  }
+
   // 获取上传令牌
   const getUploadToken = async (type, fileType, fileName, fileSize, fileStorage = 'default') => {
     isGettingToken.value = true
@@ -55,6 +83,34 @@ export function useUploadToken() {
     }
   }
 
+  // 带重试的保存上传结果
+  const saveUploadResultWithRetry = async (fileId, itemType, itemId, maxRetries = 5, retryDelay = 30000) => {
+    let retries = 0
+    
+    while (retries < maxRetries) {
+      try {
+        return await saveUploadResult(fileId, itemType, itemId)
+      } catch (err) {
+        // 只有视频正在合成中的错误才重试
+        if (err.message.includes('视频正在合成中')) {
+          retries++
+          console.log(`视频正在合成中，${retries}秒后重试 (${retries}/${maxRetries})...`)
+          
+          if (retries >= maxRetries) {
+            console.error('达到最大重试次数，保存上传结果失败')
+            throw err
+          }
+          
+          // 等待一段时间后重试
+          await new Promise(resolve => setTimeout(resolve, retryDelay))
+        } else {
+          // 其他错误直接抛出
+          throw err
+        }
+      }
+    }
+  }
+
   // 保存上传结果
   const saveUploadResult = async (fileId, itemType, itemId) => {
     try {
@@ -100,7 +156,9 @@ export function useUploadToken() {
     isGettingToken,
     tokenError,
     getUploadToken,
+    getUploadTokenWithRetry,
     saveUploadResult,
+    saveUploadResultWithRetry,
     clearToken
   }
 }
