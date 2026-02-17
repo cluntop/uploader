@@ -18,9 +18,7 @@ const RECOGNIZE_API = 'https://emos.prlo.de/api/recognize'
 // 手动映射存储
 const MANUAL_MAP_KEY = 'manual_map'
 
-// 识别结果缓存
-const RECOGNITION_CACHE_KEY = 'recognition_cache'
-const CACHE_EXPIRY_TIME = 7 * 24 * 60 * 60 * 1000 // 7天
+
 
 // 获取手动映射
 const getManualMap = () => {
@@ -56,69 +54,7 @@ const clearManualMap = (filename) => {
   saveManualMap(map)
 }
 
-// 获取识别缓存
-const getRecognitionCache = () => {
-  try {
-    const saved = sessionStorage.getItem(RECOGNITION_CACHE_KEY)
-    if (saved) {
-      const cache = JSON.parse(saved)
-      // 清除过期缓存
-      const now = Date.now()
-      const validCache = {}
-      Object.keys(cache).forEach(key => {
-        if (cache[key].timestamp + CACHE_EXPIRY_TIME > now) {
-          validCache[key] = cache[key]
-        }
-      })
-      // 保存清理后的缓存
-      if (Object.keys(validCache).length !== Object.keys(cache).length) {
-        sessionStorage.setItem(RECOGNITION_CACHE_KEY, JSON.stringify(validCache))
-      }
-      return validCache
-    }
-    return {}
-  } catch (e) {
-    console.error('获取识别缓存失败:', e)
-    return {}
-  }
-}
 
-// 保存识别缓存
-const saveRecognitionCache = (cache) => {
-  try {
-    sessionStorage.setItem(RECOGNITION_CACHE_KEY, JSON.stringify(cache))
-  } catch (e) {
-    console.error('保存识别缓存失败:', e)
-  }
-}
-
-// 添加识别结果到缓存
-const addToRecognitionCache = (filename, result) => {
-  const cache = getRecognitionCache()
-  cache[filename] = {
-    result,
-    timestamp: Date.now()
-  }
-  saveRecognitionCache(cache)
-}
-
-// 从缓存获取识别结果
-const getFromRecognitionCache = (filename) => {
-  const cache = getRecognitionCache()
-  return cache[filename]?.result || null
-}
-
-// 清除识别缓存
-const clearRecognitionCache = (filename = null) => {
-  const cache = getRecognitionCache()
-  if (filename) {
-    delete cache[filename]
-  } else {
-    // 清除所有缓存
-    return sessionStorage.removeItem(RECOGNITION_CACHE_KEY)
-  }
-  saveRecognitionCache(cache)
-}
 
 // 搜索视频 ID
 const searchVideoId = async (title, logger = console) => {
@@ -404,15 +340,7 @@ const searchItemId = async (filename, logger = console) => {
   }
   steps.push({ name: '认证检查', status: '成功', message: '已登录，可以搜索视频' })
   
-  // 检查缓存
-  steps.push({ name: '缓存检查', status: '开始', message: '检查是否有缓存的识别结果' })
-  const cachedResult = getFromRecognitionCache(filename)
-  if (cachedResult) {
-    logger.log(`缓存命中: ID ${cachedResult.video_id}`)
-    steps.push({ name: '缓存检查', status: '成功', message: `找到缓存结果: ID ${cachedResult.video_id}` })
-    return cachedResult
-  }
-  steps.push({ name: '缓存检查', status: '失败', message: '未找到缓存结果' })
+
   
   // 检查手动映射
   steps.push({ name: '手动映射检查', status: '开始', message: '检查是否有手动映射' })
@@ -427,8 +355,7 @@ const searchItemId = async (filename, logger = console) => {
       title: 'Manual Link',
       media_uuid: m.media_uuid || null
     }
-    // 保存到缓存
-    addToRecognitionCache(filename, result)
+
     return result
   }
   steps.push({ name: '手动映射检查', status: '失败', message: '未找到手动映射' })
@@ -516,8 +443,7 @@ const searchItemId = async (filename, logger = console) => {
             title: `${result.video_title} S${season}E${episode}`,
             media_uuid: null
           }
-          // 保存到缓存
-          addToRecognitionCache(filename, returnResult)
+
           return returnResult
         }
         steps.push({ name: '精准定位', status: '失败', message: `未找到剧集 S${season}E${episode}` })
@@ -530,8 +456,7 @@ const searchItemId = async (filename, logger = console) => {
             title: result.video_title,
             media_uuid: null
           }
-          // 保存到缓存
-          addToRecognitionCache(filename, returnResult)
+
           return returnResult
         }
         steps.push({ name: '精准定位', status: '失败', message: '未找到对应的视频' })
@@ -618,8 +543,6 @@ const searchItemId = async (filename, logger = console) => {
                 title: `${tmdbResult.video_title} S${season}E${episode}`,
                 media_uuid: null
               }
-              // 保存到缓存
-              addToRecognitionCache(filename, returnResult)
               return returnResult
             }
             steps.push({ name: 'TMDB 定位', status: '失败', message: `未找到剧集 S${season}E${episode}` })
@@ -632,8 +555,7 @@ const searchItemId = async (filename, logger = console) => {
                 title: tmdbResult.video_title,
                 media_uuid: null
               }
-              // 保存到缓存
-              addToRecognitionCache(filename, returnResult)
+
               return returnResult
             }
             steps.push({ name: 'TMDB 定位', status: '失败', message: '未找到对应的视频' })
@@ -664,8 +586,7 @@ const searchItemId = async (filename, logger = console) => {
                 title: retryResult.episode_info.episode_title,
                 media_uuid: null
               }
-              // 保存到缓存
-              addToRecognitionCache(filename, returnResult)
+
               return returnResult
             }
             steps.push({ name: '剧集定位', status: '失败', message: `未找到剧集 S${season}E${episode}` })
@@ -689,8 +610,7 @@ const searchItemId = async (filename, logger = console) => {
           title: first.video_title,
           media_uuid: null
         }
-        // 保存到缓存
-        addToRecognitionCache(filename, returnResult)
+        
         return returnResult
       }
     } else {
@@ -716,9 +636,5 @@ export {
   clearManualMap,
   getManualMap,
   getVideoTree,
-  getMediaList,
-  getRecognitionCache,
-  addToRecognitionCache,
-  getFromRecognitionCache,
-  clearRecognitionCache
+  getMediaList
 }

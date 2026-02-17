@@ -465,9 +465,7 @@ const recognizeFile = async (file) => {
         } else if (message.includes('精准定位')) {
           recognitionStep.value = '精准定位视频...'
           recognitionSteps.value.push({ name: '精准定位', status: '开始', message: '精准定位视频' })
-        } else if (message.includes('缓存命中')) {
-          recognitionStep.value = '缓存命中，直接使用结果...'
-          recognitionSteps.value.push({ name: '缓存检查', status: '成功', message: '缓存命中' })
+
         } else if (message.includes('手动映射命中')) {
           recognitionStep.value = '手动映射命中，直接使用结果...'
           recognitionSteps.value.push({ name: '手动映射', status: '成功', message: '手动映射命中' })
