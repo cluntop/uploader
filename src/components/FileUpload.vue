@@ -5,9 +5,9 @@
       <label class="block text-gray-800 font-medium mb-2 text-sm">上传类型</label>
       <div class="flex gap-3">
         <button
-          @click="uploadType = 'video'"
+          @click="uploadType = 'video'; idInputMode = 'auto'"
           :class="[
-            'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300',
+            'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 flex items-center gap-2',
             uploadType === 'video'
               ? 'gradient-theme text-white shadow-md'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
@@ -16,9 +16,9 @@
           📹 视频
         </button>
         <button
-          @click="uploadType = 'subtitle'"
+          @click="uploadType = 'subtitle'; idInputMode = 'auto'"
           :class="[
-            'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300',
+            'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 flex items-center gap-2',
             uploadType === 'subtitle'
               ? 'gradient-theme text-white shadow-md'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
@@ -27,10 +27,15 @@
           📝 字幕
         </button>
         <button
-          disabled
-          class="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-400 cursor-not-allowed"
+          @click="uploadType = 'image'; idInputMode = 'auto'"
+          :class="[
+            'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 flex items-center gap-2',
+            uploadType === 'image'
+              ? 'gradient-theme text-white shadow-md'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          ]"
         >
-          🖼️ 封面（即将开放）
+          🖼️ 图片
         </button>
       </div>
     </div>
@@ -345,7 +350,7 @@ const getUploadTypeLabel = () => {
   const labels = {
     video: '视频',
     subtitle: '字幕',
-    cover: '封面'
+    image: '图片'
   }
   return labels[uploadType.value] || '未知'
 }
@@ -355,7 +360,7 @@ const getAcceptType = () => {
   const types = {
     video: 'video/*',
     subtitle: '.srt,.ass,.ssa,.vtt',
-    cover: 'image/*'
+    image: 'image/*'
   }
   return types[uploadType.value] || '*'
 }
@@ -365,7 +370,7 @@ const getAcceptHint = () => {
   const hints = {
     video: '仅支持视频文件 (MP4, AVI, MOV, MKV 等)',
     subtitle: '支持字幕文件 (SRT, ASS, SSA, VTT)',
-    cover: '支持图片文件 (JPG, PNG, WEBP 等)'
+    image: '支持图片文件 (JPG, PNG, WEBP, GIF, BMP 等)'
   }
   return hints[uploadType.value] || '请选择文件'
 }
@@ -407,8 +412,13 @@ const isValidFile = (file) => {
     return subtitleExtensions.some(ext => fileName.endsWith(ext))
   }
 
-  if (uploadType.value === 'cover') {
-    return file.type.startsWith('image/')
+  if (uploadType.value === 'image') {
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']
+    const fileName = file.name.toLowerCase()
+    if (file.type.startsWith('image/')) {
+      return true
+    }
+    return imageExtensions.some(ext => fileName.endsWith(ext))
   }
 
   return false

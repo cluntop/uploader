@@ -169,15 +169,23 @@ export function useUpload() {
       console.error('分片上传失败，已保存进度，可以断点续传:', error)
       canResume.value = true
       // 处理错误消息
+      let errorMessage = '上传失败，请稍后重试'
       if (error.message.includes('Network')) {
-        throw new Error(ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR)
+        errorMessage = ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR
       } else if (error.message.includes('50')) {
-        throw new Error(ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR)
+        errorMessage = ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR
       } else if (error.message.includes('422') || error.message.includes('视频正在合成中')) {
-        throw new Error('视频正在合成中')
+        errorMessage = '视频正在合成中'
+      } else if (error.message.includes('401') || error.message.includes('认证')) {
+        errorMessage = ERROR_CONFIG.ERROR_MESSAGES.AUTH_ERROR
+      } else if (error.message.includes('403')) {
+        errorMessage = '权限不足，无法上传文件'
+      } else if (error.message.includes('404')) {
+        errorMessage = '上传地址无效，请重新获取'
       } else {
-        throw new Error(ERROR_CONFIG.SHOW_DETAILED_ERRORS ? error.message : ERROR_CONFIG.ERROR_MESSAGES.UPLOAD_ERROR)
+        errorMessage = ERROR_CONFIG.SHOW_DETAILED_ERRORS ? error.message : ERROR_CONFIG.ERROR_MESSAGES.UPLOAD_ERROR
       }
+      throw new Error(errorMessage)
     }
   }
 
@@ -213,15 +221,23 @@ export function useUpload() {
     } catch (error) {
       console.error('上传失败:', error)
       // 处理错误消息
+      let errorMessage = '上传失败，请稍后重试'
       if (error.message.includes('Network')) {
-        throw new Error(ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR)
+        errorMessage = ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR
       } else if (error.message.includes('50')) {
-        throw new Error(ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR)
+        errorMessage = ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR
       } else if (error.message.includes('422') || error.message.includes('视频正在合成中')) {
-        throw new Error('视频正在合成中')
+        errorMessage = '视频正在合成中'
+      } else if (error.message.includes('401') || error.message.includes('认证')) {
+        errorMessage = ERROR_CONFIG.ERROR_MESSAGES.AUTH_ERROR
+      } else if (error.message.includes('403')) {
+        errorMessage = '权限不足，无法上传文件'
+      } else if (error.message.includes('404')) {
+        errorMessage = '上传地址无效，请重新获取'
       } else {
-        throw new Error(ERROR_CONFIG.SHOW_DETAILED_ERRORS ? error.message : ERROR_CONFIG.ERROR_MESSAGES.UPLOAD_ERROR)
+        errorMessage = ERROR_CONFIG.SHOW_DETAILED_ERRORS ? error.message : ERROR_CONFIG.ERROR_MESSAGES.UPLOAD_ERROR
       }
+      throw new Error(errorMessage)
     }
   }
 
@@ -236,7 +252,19 @@ export function useUpload() {
       })
     } catch (e) {
       console.error('获取上传基础信息失败:', e)
-      throw e
+      let errorMessage = '获取上传基础信息失败'
+      if (e.message.includes('Network')) {
+        errorMessage = ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR
+      } else if (e.message.includes('401') || e.message.includes('认证')) {
+        errorMessage = ERROR_CONFIG.ERROR_MESSAGES.AUTH_ERROR
+      } else if (e.message.includes('403')) {
+        errorMessage = '权限不足，无法获取上传信息'
+      } else if (e.message.includes('404')) {
+        errorMessage = '视频信息不存在'
+      } else {
+        errorMessage = e.message || errorMessage
+      }
+      throw new Error(errorMessage)
     }
   }
 
@@ -247,7 +275,17 @@ export function useUpload() {
       return response
     } catch (e) {
       console.error('获取上传令牌失败:', e)
-      throw e
+      let errorMessage = '获取上传令牌失败'
+      if (e.message.includes('Network')) {
+        errorMessage = ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR
+      } else if (e.message.includes('401') || e.message.includes('认证')) {
+        errorMessage = ERROR_CONFIG.ERROR_MESSAGES.AUTH_ERROR
+      } else if (e.message.includes('403')) {
+        errorMessage = '权限不足，无法获取上传令牌'
+      } else {
+        errorMessage = e.message || errorMessage
+      }
+      throw new Error(errorMessage)
     }
   }
 
@@ -261,7 +299,75 @@ export function useUpload() {
       }
     } catch (e) {
       console.error('保存上传结果失败:', e)
-      throw e
+      let errorMessage = '保存上传结果失败'
+      if (e.message.includes('Network')) {
+        errorMessage = ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR
+      } else if (e.message.includes('401') || e.message.includes('认证')) {
+        errorMessage = ERROR_CONFIG.ERROR_MESSAGES.AUTH_ERROR
+      } else if (e.message.includes('403')) {
+        errorMessage = '权限不足，无法保存上传结果'
+      } else if (e.message.includes('404')) {
+        errorMessage = '视频信息不存在'
+      } else {
+        errorMessage = e.message || errorMessage
+      }
+      throw new Error(errorMessage)
+    }
+  }
+
+  // 获取资源列表
+  const getMediaList = async (params = {}) => {
+    try {
+      const response = await api.get(API_ENDPOINTS.MEDIA_LIST, {
+        params: {
+          video_list_id: params.video_list_id || '',
+          video_season_id: params.video_season_id || '',
+          video_episode_id: params.video_episode_id || '',
+          video_part_id: params.video_part_id || ''
+        }
+      })
+      return response
+    } catch (e) {
+      console.error('获取资源列表失败:', e)
+      let errorMessage = '获取资源列表失败'
+      if (e.message.includes('Network')) {
+        errorMessage = ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR
+      } else if (e.message.includes('401') || e.message.includes('认证')) {
+        errorMessage = ERROR_CONFIG.ERROR_MESSAGES.AUTH_ERROR
+      } else if (e.message.includes('403')) {
+        errorMessage = '权限不足，无法获取资源列表'
+      } else {
+        errorMessage = e.message || errorMessage
+      }
+      throw new Error(errorMessage)
+    }
+  }
+
+  // 获取字幕列表
+  const getSubtitleList = async (params = {}) => {
+    try {
+      const response = await api.get(API_ENDPOINTS.SUBTITLE_LIST, {
+        params: {
+          video_list_id: params.video_list_id || '',
+          video_episode_id: params.video_episode_id || '',
+          video_part_id: params.video_part_id || '',
+          video_media_id: params.video_media_id || ''
+        }
+      })
+      return response
+    } catch (e) {
+      console.error('获取字幕列表失败:', e)
+      let errorMessage = '获取字幕列表失败'
+      if (e.message.includes('Network')) {
+        errorMessage = ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR
+      } else if (e.message.includes('401') || e.message.includes('认证')) {
+        errorMessage = ERROR_CONFIG.ERROR_MESSAGES.AUTH_ERROR
+      } else if (e.message.includes('403')) {
+        errorMessage = '权限不足，无法获取字幕列表'
+      } else {
+        errorMessage = e.message || errorMessage
+      }
+      throw new Error(errorMessage)
     }
   }
 
@@ -321,8 +427,27 @@ export function useUpload() {
       return uploadResponse
     } catch (error) {
       console.error('上传异常:', error)
+      let errorMessage = '上传失败，请稍后重试'
+      
+      // 根据错误类型提供更准确的提示
+      if (error.message.includes('Network')) {
+        errorMessage = '网络连接失败，请检查您的网络'
+      } else if (error.message.includes('50')) {
+        errorMessage = '服务器错误，请稍后重试'
+      } else if (error.message.includes('422') || error.message.includes('视频正在合成中')) {
+        errorMessage = '视频正在合成中，请稍后再试'
+      } else if (error.message.includes('401') || error.message.includes('认证')) {
+        errorMessage = '认证失败，请重新登录'
+      } else if (error.message.includes('403')) {
+        errorMessage = '权限不足，无法上传文件'
+      } else if (error.message.includes('404')) {
+        errorMessage = '上传地址无效，请重新获取'
+      } else {
+        errorMessage = error.message || errorMessage
+      }
+      
       if (onProgress) {
-        onProgress(`上传出错: ${error.message}`, 'error')
+        onProgress(`上传出错: ${errorMessage}`, 'error')
       }
       throw error
     } finally {
@@ -362,7 +487,10 @@ export function useUpload() {
         onProgress(`识别成功: ${info.title}`, 'uploading')
       }
 
-      // 获取上传基础信息
+      // 步骤1: 获取上传基础信息
+      if (onProgress) {
+        onProgress('获取上传基础信息...', 'uploading')
+      }
       await getUploadBase(info.item_type, info.video_id)
 
       // 确定文件类型
@@ -388,7 +516,10 @@ export function useUpload() {
       
       const mime = mimeMap[ext] || 'application/octet-stream'
 
-      // 获取上传令牌
+      // 步骤2: 获取上传令牌
+      if (onProgress) {
+        onProgress('获取上传令牌...', 'uploading')
+      }
       let uploadType = 'video'
       if (isSubtitle) {
         uploadType = 'subtitle'
@@ -419,7 +550,10 @@ export function useUpload() {
       // 上传文件
       await uploadFile(file, uploadUrl, onProgress)
 
-      // 保存上传结果
+      // 步骤3: 保存上传结果
+      if (onProgress) {
+        onProgress('保存上传结果...', 'uploading')
+      }
       const savePayload = {
         item_type: info.item_type,
         item_id: info.video_id,
@@ -469,6 +603,8 @@ export function useUpload() {
     formatFileSize,
     getUploadBase,
     getUploadToken,
-    saveUpload
+    saveUpload,
+    getMediaList,
+    getSubtitleList
   }
 }

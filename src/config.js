@@ -20,6 +20,7 @@ export const API_ENDPOINTS = {
   VIDEO_SEARCH: '/api/video/search',
   GET_VIDEO_ID: '/api/video/getVideoId',
   MEDIA_LIST: '/api/video/media/list',
+  SUBTITLE_LIST: '/api/video/subtitle/list',
   
   // 上传相关
   VIDEO_INFO: '/api/upload/video/base',

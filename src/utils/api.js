@@ -16,6 +16,9 @@ const cache = new Map()
 // 缓存过期时间（毫秒）
 const CACHE_EXPIRY = 5 * 60 * 1000 // 5分钟
 
+// 缓存大小限制
+const MAX_CACHE_SIZE = 50
+
 // 重试配置
 const RETRY_CONFIG = {
   maxAttempts: 3,
@@ -39,7 +42,24 @@ const isCacheValid = (cachedData) => {
 
 // 获取认证令牌
 const getAuthToken = () => {
-  return sessionStorage.getItem('token')
+  try {
+    const token = sessionStorage.getItem('token')
+    if (!token) {
+      return null
+    }
+    
+    // 验证令牌格式
+    if (!token.startsWith('eyJ')) {
+      console.warn('无效的令牌格式')
+      sessionStorage.removeItem('token')
+      return null
+    }
+    
+    return token
+  } catch (e) {
+    console.error('获取令牌失败:', e)
+    return null
+  }
 }
 
 // 构建请求选项
@@ -47,6 +67,8 @@ const buildRequestOptions = (options = {}) => {
   const token = getAuthToken()
   const headers = {
     'Content-Type': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+    'X-API-Client': 'emos-uploader',
     ...options.headers
   }
 
@@ -54,9 +76,15 @@ const buildRequestOptions = (options = {}) => {
     headers['Authorization'] = `Bearer ${token}`
   }
 
+  // 确保请求方法正确设置
+  const method = options.method || 'GET'
+
   return {
     ...options,
-    headers
+    method,
+    headers,
+    // 添加请求超时设置
+    timeout: options.timeout || 30000
   }
 }
 
@@ -66,7 +94,7 @@ const handleResponse = async (response) => {
     // 尝试解析错误响应
     try {
       const errorData = await response.json()
-      let errorMessage = errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`
+      let errorMessage = errorData.message || errorData.error || errorData.msg || `HTTP ${response.status}: ${response.statusText}`
       
       // 特殊处理 HTTP 422 错误
       if (response.status === 422) {
@@ -76,6 +104,7 @@ const handleResponse = async (response) => {
       const error = new Error(errorMessage)
       error.status = response.status
       error.data = errorData
+      error.code = errorData.code || errorData.error_code
       throw error
     } catch (e) {
       let errorMessage = `HTTP ${response.status}: ${response.statusText}`
@@ -95,7 +124,17 @@ const handleResponse = async (response) => {
   try {
     return await response.json()
   } catch (e) {
-    return response.text()
+    try {
+      // 尝试解析文本响应
+      const text = await response.text()
+      // 检查是否是 JSON 格式的文本
+      if (text.trim().startsWith('{') && text.trim().endsWith('}')) {
+        return JSON.parse(text)
+      }
+      return text
+    } catch (e) {
+      return null
+    }
   }
 }
 
@@ -103,14 +142,31 @@ const handleResponse = async (response) => {
 const retryRequest = async (url, options, attempt = 1) => {
   try {
     console.log(`API 请求 (${attempt}/${RETRY_CONFIG.maxAttempts}): ${url}`)
-    const response = await fetch(url, options)
+    
+    // 添加请求超时处理
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), options.timeout || 30000)
+    
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    })
+    
+    clearTimeout(timeoutId)
     console.log(`API 响应状态: ${response.status}`)
     return await handleResponse(response)
   } catch (error) {
     console.error(`API 请求失败 (${attempt}/${RETRY_CONFIG.maxAttempts}):`, error)
+    
+    // 检查是否是超时错误
+    if (error.name === 'AbortError') {
+      console.error('API 请求超时')
+      throw new Error('请求超时，请检查网络连接')
+    }
+    
     // 只对网络错误或 5xx 错误进行重试
     if (attempt < RETRY_CONFIG.maxAttempts && 
-        (error.message.includes('Network') || error.message.includes('Failed to fetch') || error.status >= 500 || error.message.includes('50'))) {
+        (error.message.includes('Network') || error.message.includes('Failed to fetch') || error.status >= 500 || error.message.includes('50') || error.message.includes('timeout'))) {
       const delay = RETRY_CONFIG.delay * Math.pow(RETRY_CONFIG.backoff, attempt - 1)
       console.log(`正在重试 (${attempt}/${RETRY_CONFIG.maxAttempts})，延迟 ${delay}ms...`)
       await new Promise(resolve => setTimeout(resolve, delay))
@@ -140,6 +196,13 @@ const api = {
 
     const data = await retryRequest(url, requestOptions)
 
+    // 缓存响应，检查缓存大小
+    if (cache.size >= MAX_CACHE_SIZE) {
+      // 移除最早的缓存项
+      const oldestKey = cache.keys().next().value
+      cache.delete(oldestKey)
+    }
+    
     // 缓存响应
     cache.set(cacheKey, {
       data,
