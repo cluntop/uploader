@@ -27,7 +27,6 @@
           :username="auth.username.value"
           :is-uploading="upload.isUploading.value"
           :is-saving="isSaving"
-          @login="handleLogin"
           @logout="handleLogout"
         />
 

@@ -16,12 +16,6 @@
         <img src="../assets/avatar.png" alt="用户头像" class="w-full h-full object-cover" />
       </div>
       <div class="flex-1 text-base font-medium">未登录</div>
-      <button
-        @click="handleLogin"
-        class="px-6 py-2.5 bg-white text-teal-600 rounded-lg text-sm font-semibold hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
-      >
-        登录
-      </button>
     </div>
 
     <!-- 已登录状态 -->
@@ -68,11 +62,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['login', 'logout'])
-
-const handleLogin = () => {
-  emit('login')
-}
+const emit = defineEmits(['logout'])
 
 const handleLogout = () => {
   if (!props.isUploading && !props.isSaving) {
