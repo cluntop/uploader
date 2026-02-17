@@ -68,8 +68,11 @@ const checkAndHandleAuth = () => {
   }
 }
 
-// 执行授权检查
-checkAndHandleAuth()
+// 处理授权回调（仅处理回调，不强制登录）
+const isCallback = handleAuthCallback()
+if (isCallback) {
+  console.log('授权回调处理成功')
+}
 
 // 创建并挂载应用
 createApp(App).mount('#app')
