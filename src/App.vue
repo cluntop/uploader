@@ -84,7 +84,6 @@ import { useVideoInfo } from './composables/useVideoInfo'
 import { useUpload } from './composables/useUpload'
 import { useUploadToken } from './composables/useUploadToken'
 import { useNotification } from './composables/useNotification'
-import { checkAuthStatus, handleCallbackWithRedirect } from './utils/auth'
 
 // 初始化所有 composables
 const auth = useAuth()
@@ -568,41 +567,14 @@ const handleContinueUpload = () => {
 }
 
 // 处理登录回调后显示成功消息
-const handleAuthCallbackInApp = () => {
-  try {
-    const urlParams = new URLSearchParams(window.location.search)
-    const user_id = urlParams.get('user_id')
-    const username = urlParams.get('username')
-    const avatar = urlParams.get('avatar')
-    const token = urlParams.get('token')
-    
-    if (user_id && token) {
-      const userInfo = {
-        user_id,
-        username,
-        avatar,
-        token
-      }
-      handleCallbackWithRedirect(userInfo)
-      // 清除URL参数，避免刷新页面时重复处理
-      window.history.replaceState({}, document.title, window.location.pathname)
-      return true
-    }
-    return false
-  } catch (error) {
-    console.error('处理授权回调失败:', error)
-    return false
-  }
-}
-
-const loginCallbackHandled = handleAuthCallbackInApp()
+const loginCallbackHandled = auth.handleLoginCallback()
 if (loginCallbackHandled) {
   notification.showStatus('登录成功！', 'success')
 }
 
 onMounted(() => {
   // 检查认证状态
-  const isAuthorized = checkAuthStatus()
+  const isAuthorized = auth.checkAuthStatus()
   if (isAuthorized) {
     console.log('用户已授权，应用正常加载')
   } else {

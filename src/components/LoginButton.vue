@@ -1,7 +1,7 @@
 <template>
   <div class="login-button-container">
     <button
-      v-if="!isUserAuthenticated"
+      v-if="!isLoggedIn"
       @click="handleLogin"
       class="login-button"
       :disabled="isLoading"
@@ -10,57 +10,39 @@
       <span>{{ isLoading ? '跳转中...' : '登录' }}</span>
     </button>
     <div v-else class="user-info">
-      <img v-if="userInfo?.avatar" :src="userInfo.avatar" alt="用户头像" class="user-avatar" />
-      <span class="username">{{ userInfo?.username || '用户' }}</span>
+      <img v-if="avatar" :src="avatar" alt="用户头像" class="user-avatar" />
+      <span class="username">{{ username || '用户' }}</span>
       <button @click="handleLogout" class="logout-button">退出</button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { isAuthenticated, buildAuthUrl, getUserInfo, clearAuthInfo, saveOriginalUrl } from '../utils/auth'
+import { onMounted } from 'vue'
+import { useAuth } from '../composables/useAuth'
 
-const isLoading = ref(false)
-const userInfo = ref(null)
+const {
+  isLoggedIn,
+  username,
+  avatar,
+  isLoading,
+  login,
+  logout,
+  updateUserState
+} = useAuth()
 
-const isUserAuthenticated = computed(() => {
-  return isAuthenticated()
-})
-
-const handleLogin = async () => {
-  try {
-    isLoading.value = true
-    // 保存用户当前的访问链接
-    const currentUrl = window.location.href
-    saveOriginalUrl(currentUrl)
-    const authUrl = buildAuthUrl()
-    window.location.href = authUrl
-  } catch (error) {
-    console.error('登录失败:', error)
-    isLoading.value = false
-  }
+const handleLogin = () => {
+  login()
 }
 
 const handleLogout = () => {
-  try {
-    clearAuthInfo()
-    window.location.reload()
-  } catch (error) {
-    console.error('退出登录失败:', error)
-  }
-}
-
-const loadUserInfo = () => {
-  try {
-    userInfo.value = getUserInfo()
-  } catch (error) {
-    console.error('加载用户信息失败:', error)
-  }
+  logout()
+  // 刷新页面以更新状态
+  window.location.reload()
 }
 
 onMounted(() => {
-  loadUserInfo()
+  updateUserState()
 })
 </script>
 

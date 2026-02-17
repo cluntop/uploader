@@ -90,6 +90,18 @@ export function useAuth() {
     }
   }
 
+  // 检查认证状态
+  const checkAuthStatus = () => {
+    try {
+      const userInfo = getUserInfo()
+      const token = sessionStorage.getItem('token')
+      return !!userInfo && !!token
+    } catch (error) {
+      console.error('检查授权状态失败:', error)
+      return false
+    }
+  }
+
   // 更新用户状态
   const updateUserState = () => {
     try {
@@ -111,6 +123,55 @@ export function useAuth() {
     }
   }
 
+  // 保存用户原始访问链接
+  const saveOriginalUrl = (url, expiry = 30 * 60 * 1000) => {
+    try {
+      if (!url) {
+        return
+      }
+      const expiryTime = Date.now() + expiry
+      sessionStorage.setItem('original_url', url)
+      sessionStorage.setItem('original_url_expiry', expiryTime.toString())
+      console.log('原始链接保存成功:', url)
+    } catch (error) {
+      console.error('保存原始链接失败:', error)
+    }
+  }
+
+  // 获取用户原始访问链接
+  const getOriginalUrl = () => {
+    try {
+      const url = sessionStorage.getItem('original_url')
+      const expiry = sessionStorage.getItem('original_url_expiry')
+      if (!url) {
+        return null
+      }
+      if (expiry) {
+        const expiryTime = parseInt(expiry)
+        if (Date.now() > expiryTime) {
+          console.warn('原始链接已过期')
+          clearOriginalUrl()
+          return null
+        }
+      }
+      return url
+    } catch (error) {
+      console.error('获取原始链接失败:', error)
+      return null
+    }
+  }
+
+  // 清除原始链接
+  const clearOriginalUrl = () => {
+    try {
+      sessionStorage.removeItem('original_url')
+      sessionStorage.removeItem('original_url_expiry')
+      console.log('原始链接已清除')
+    } catch (error) {
+      console.error('清除原始链接失败:', error)
+    }
+  }
+
   // 处理登录回调
   const handleLoginCallback = () => {
     try {
@@ -120,11 +181,22 @@ export function useAuth() {
       const callbackUserId = urlParams.get('user_id')
       const callbackAvatar = urlParams.get('avatar')
 
-      if (callbackToken && callbackUsername && callbackUserId) {
+      if (callbackToken && callbackUserId) {
         console.log('检测到登录回调，保存用户信息')
         const saved = saveUserInfo(callbackToken, callbackUsername, callbackUserId, callbackAvatar)
 
         if (saved) {
+          // 获取原始链接并尝试重定向
+          const originalUrl = getOriginalUrl()
+          if (originalUrl) {
+            console.log('重定向回原始链接:', originalUrl)
+            clearOriginalUrl()
+            // 清除 URL 中的参数
+            const cleanUrl = window.location.origin + window.location.pathname
+            window.history.replaceState({}, document.title, cleanUrl)
+            window.location.href = originalUrl
+            return true
+          }
           // 清除 URL 中的参数
           const cleanUrl = window.location.origin + window.location.pathname
           window.history.replaceState({}, document.title, cleanUrl)
@@ -142,6 +214,10 @@ export function useAuth() {
   // 登录
   const login = () => {
     try {
+      // 保存当前页面作为原始链接
+      const currentUrl = window.location.href
+      saveOriginalUrl(currentUrl)
+      
       const uuid = generateUUID()
       const name = 'emos-upload'
       const callbackUrl = encodeURIComponent(window.location.origin + window.location.pathname)
@@ -216,6 +292,10 @@ export function useAuth() {
     logout,
     handleLoginCallback,
     validateToken,
-    updateUserState
+    updateUserState,
+    checkAuthStatus,
+    saveOriginalUrl,
+    getOriginalUrl,
+    clearOriginalUrl
   }
 }

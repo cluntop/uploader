@@ -27,7 +27,7 @@ const AUTH_CONSTANTS = {
 // 应用配置
 const APP_CONFIG = {
   APP_NAME: 'emos-uploader',
-  CALLBACK_URL: 'https://emos-link.local/',
+  CALLBACK_URL: 'https://emos.clun.top/',
   AUTH_BASE_URL: 'https://emos.best/link'
 }
 
