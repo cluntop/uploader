@@ -17,12 +17,13 @@
     "vue": "3.5.28"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.18",
     "@vitejs/plugin-vue": "6.0.4",
     "@vue/test-utils": "2.4.6",
     "autoprefixer": "10.4.24",
-    "eslint": "8.57.0",
-    "eslint-plugin-vue": "9.23.0",
-    "npm-check-updates": "16.14.20",
+    "eslint": "^4.1.1",
+    "eslint-plugin-vue": "^4.7.1",
+    "npm-check-updates": "^19.3.2",
     "tailwindcss": "4.1.18",
     "terser": "5.44.1",
     "vite": "7.3.1",
