@@ -138,72 +138,6 @@
       @change="handleFileChange"
     />
 
-    <!-- 识别结果 -->
-    <div v-if="recognitionResult && !uploadSummaryInfo" class="recognition-result mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-      <div class="flex justify-between items-start">
-        <div>
-          <div class="font-medium text-green-800 mb-1">
-            🎯 识别成功
-          </div>
-          <div class="text-green-600 text-sm">
-            视频标题: {{ recognitionResult.title }}
-          </div>
-          <div class="text-green-600 text-sm">
-            视频 ID: {{ recognitionResult.video_id }}
-          </div>
-          <div class="text-green-600 text-sm">
-            类型: {{ getRecognitionTypeLabel() }}
-          </div>
-        </div>
-        <button 
-          v-if="recognitionResult" 
-          @click="resetRecognition"
-          class="text-sm text-gray-500 hover:text-gray-700"
-        >
-          🔄 重新识别
-        </button>
-      </div>
-    </div>
-
-    <!-- 识别错误 -->
-    <div v-if="recognitionError && !uploadSummaryInfo" class="recognition-error mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-      <div class="font-medium text-red-800 mb-1">
-        ❌ 识别失败
-      </div>
-      <div class="text-red-600 text-sm mb-2">
-        {{ typeof recognitionError === 'string' ? recognitionError : recognitionError.message || '识别失败，请重试' }}
-      </div>
-      <div class="flex gap-2 mb-2">
-        <button 
-          @click="retryRecognition"
-          class="text-sm text-red-700 hover:text-red-900 px-3 py-1 bg-red-100 rounded hover:bg-red-200 transition-colors"
-        >
-          🔄 重试
-        </button>
-        <button 
-          @click="showErrorDetails = !showErrorDetails"
-          class="text-sm text-red-700 hover:text-red-900 px-3 py-1 bg-red-100 rounded hover:bg-red-200 transition-colors"
-        >
-          {{ showErrorDetails ? '收起详情' : '查看详情' }}
-        </button>
-      </div>
-      <div v-if="showErrorDetails" class="mt-2 p-3 bg-red-100 rounded-lg text-xs text-red-700 overflow-auto max-h-40">
-        <div v-if="typeof recognitionError === 'object' && recognitionError.steps" class="mb-2">
-          <div class="font-medium mb-1">识别步骤详情：</div>
-          <div v-for="(step, index) in recognitionError.steps" :key="index" class="mb-1">
-            <div class="font-medium">{{ step.name }}</div>
-            <div class="ml-2">{{ step.status }} - {{ step.message }}</div>
-          </div>
-        </div>
-        <div v-else-if="typeof recognitionError === 'object'" class="pre-wrap">
-          {{ JSON.stringify(recognitionError, null, 2) }}
-        </div>
-        <div v-else class="pre-wrap">
-          {{ recognitionError }}
-        </div>
-      </div>
-    </div>
-
     <!-- 已选择文件列表 -->
     <div v-if="isLoggedIn && selectedFiles.length > 0 && !uploadSummaryInfo" class="file-list mt-5">
       <div class="font-medium text-gray-800 mb-2 flex justify-between items-center">
@@ -237,50 +171,88 @@
 
     <!-- 单个文件信息（保持原有逻辑） -->
     <div v-if="isLoggedIn && selectedFile && selectedFiles.length === 1 && !uploadSummaryInfo" class="file-info mt-5 p-4 bg-gray-100 rounded-lg">
-      <div class="font-medium text-gray-800 mb-1">
-        文件名: {{ selectedFile.name }}
-      </div>
-      <div class="text-gray-600 text-sm mb-2">
-        大小: {{ formatFileSize(selectedFile.size) }} | 类型: {{ getUploadTypeLabel() }}
-        <span v-if="idInputMode === 'auto'" class="ml-2">
-          <span v-if="recognitionResult" class="text-green-600 font-medium">
-            🎯 已识别: {{ recognitionResult.title }}
-            <span class="ml-1 text-xs bg-green-100 px-2 py-0.5 rounded-full text-green-700">
-              {{ getRecognitionTypeLabel() }}
+      <div class="flex justify-between items-start">
+        <div>
+          <div class="font-medium text-gray-800 mb-1">
+            文件名: {{ selectedFile.name }}
+          </div>
+          <div class="text-gray-600 text-sm mb-2">
+            大小: {{ formatFileSize(selectedFile.size) }} | 类型: {{ getUploadTypeLabel() }}
+          </div>
+          <div class="text-gray-600 text-sm" v-if="videoId">
+            视频ID: {{ videoId }}
+          </div>
+        </div>
+        <div class="flex flex-col items-end">
+          <div v-if="idInputMode === 'auto' || idInputMode === 'manual_recognize'" class="mb-2">
+            <span v-if="recognitionResult" class="text-green-600 font-medium">
+              🎯 已识别: {{ recognitionResult.title }}
+              <span class="ml-1 text-xs bg-green-100 px-2 py-0.5 rounded-full text-green-700">
+                {{ getRecognitionTypeLabel() }}
+              </span>
             </span>
-          </span>
-          <span v-else-if="recognitionError" class="text-red-600 font-medium">
-            ❌ 识别失败
-          </span>
-          <span v-else-if="isRecognizing" class="text-blue-600 font-medium">
-            🔍 识别中... {{ recognitionStep }}
-          </span>
-          <span v-else class="text-gray-500">
-            待识别
-          </span>
-        </span>
-        <span v-if="idInputMode === 'manual_recognize'" class="ml-2">
-          <span v-if="recognitionResult" class="text-green-600 font-medium">
-            🎯 已识别: {{ recognitionResult.title }}
-            <span class="ml-1 text-xs bg-green-100 px-2 py-0.5 rounded-full text-green-700">
-              {{ getRecognitionTypeLabel() }}
+            <span v-else-if="recognitionError" class="text-red-600 font-medium">
+              ❌ 识别失败
             </span>
-          </span>
-          <span v-else-if="recognitionError" class="text-red-600 font-medium">
-            ❌ 识别失败
-          </span>
-          <span v-else-if="isRecognizing" class="text-blue-600 font-medium">
-            🔍 识别中... {{ recognitionStep }}
-          </span>
-          <span v-else class="text-gray-500">
-            待手动识别
-          </span>
-        </span>
+            <span v-else-if="isRecognizing" class="text-blue-600 font-medium">
+              🔍 识别中... {{ recognitionStep }}
+            </span>
+            <span v-else class="text-gray-500">
+              {{ idInputMode === 'auto' ? '待识别' : '待手动识别' }}
+            </span>
+          </div>
+          <div v-if="recognitionResult" class="mb-2">
+            <div class="text-green-600 text-xs">
+              视频标题: {{ recognitionResult.title }}
+            </div>
+            <div class="text-green-600 text-xs">
+              视频 ID: {{ recognitionResult.video_id }}
+            </div>
+            <div class="text-green-600 text-xs">
+              类型: {{ getRecognitionTypeLabel() }}
+            </div>
+          </div>
+          <div v-if="recognitionError" class="mb-2 text-red-600 text-xs">
+            {{ typeof recognitionError === 'string' ? recognitionError : recognitionError.message || '识别失败，请重试' }}
+            <div class="flex gap-1 mt-1">
+              <button 
+                @click="retryRecognition"
+                class="text-xs text-red-700 hover:text-red-900 px-2 py-0.5 bg-red-100 rounded hover:bg-red-200 transition-colors"
+              >
+                🔄 重试
+              </button>
+              <button 
+                @click="showErrorDetails = !showErrorDetails"
+                class="text-xs text-red-700 hover:text-red-900 px-2 py-0.5 bg-red-100 rounded hover:bg-red-200 transition-colors"
+              >
+                {{ showErrorDetails ? '收起详情' : '查看详情' }}
+              </button>
+            </div>
+            <div v-if="showErrorDetails" class="mt-1 p-2 bg-red-100 rounded-lg text-xs text-red-700 overflow-auto max-h-20">
+              <div v-if="typeof recognitionError === 'object' && recognitionError.steps" class="mb-1">
+                <div class="font-medium mb-0.5">识别步骤详情：</div>
+                <div v-for="(step, index) in recognitionError.steps" :key="index" class="mb-0.5">
+                  <div class="font-medium">{{ step.name }}</div>
+                  <div class="ml-1">{{ step.status }} - {{ step.message }}</div>
+                </div>
+              </div>
+              <div v-else-if="typeof recognitionError === 'object'" class="pre-wrap">
+                {{ JSON.stringify(recognitionError, null, 2) }}
+              </div>
+              <div v-else class="pre-wrap">
+                {{ recognitionError }}
+              </div>
+            </div>
+          </div>
+          <button 
+            v-if="recognitionResult" 
+            @click="resetRecognition"
+            class="text-sm text-gray-500 hover:text-gray-700 mt-1"
+          >
+            🔄 重新识别
+          </button>
+        </div>
       </div>
-      <div class="text-gray-600 text-sm" v-if="videoId">
-        视频ID: {{ videoId }}
-      </div>
-
     </div>
 
     <!-- 进度条（上传过程中显示，保存期间和保存失败时隐藏） -->
