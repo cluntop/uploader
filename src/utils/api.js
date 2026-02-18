@@ -181,7 +181,22 @@ const api = {
   // GET 请求
   get: async (endpoint, options = {}) => {
     const validatedEndpoint = validateEndpoint(endpoint)
-    const url = `${BASE_URL}${validatedEndpoint}`
+    let url = `${BASE_URL}${validatedEndpoint}`
+    
+    // 处理查询参数
+    if (options.params) {
+      const searchParams = new URLSearchParams()
+      Object.entries(options.params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          searchParams.append(key, value)
+        }
+      })
+      const paramsString = searchParams.toString()
+      if (paramsString) {
+        url += `?${paramsString}`
+      }
+    }
+    
     const cacheKey = generateCacheKey(url, options)
     
     // 清理过期缓存
@@ -193,8 +208,10 @@ const api = {
       return cachedData.data
     }
 
+    // 构建请求选项，移除params（已添加到URL）
+    const { params, ...restOptions } = options
     const requestOptions = buildRequestOptions({
-      ...options,
+      ...restOptions,
       method: 'GET'
     })
 
