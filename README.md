@@ -84,3 +84,110 @@ emos-uploader/
 ## 配置
 
 在 `src/config.js` 中修改 API 端点。
+
+
+<details>
+<summary>docker 支持</summary>
+
+### 使用 docker-compose 构建并运行（推荐）
+
+使用 docker-compose 可以一步完成构建和部署，无需手动执行 docker build 命令：
+
+```bash
+docker-compose up -d
+```
+
+### 手动构建和运行（可选）
+
+如果需要手动构建和运行，可以使用以下命令：
+
+```bash
+# 构建 Docker 镜像
+docker build -t emos-uploader .
+
+# 运行 Docker 容器
+docker run -d --name emos-uploader -p 8000:3000 --restart unless-stopped emos-uploader
+```
+
+### 环境变量配置
+
+在 `.env.production` 文件中配置环境变量：
+
+```env
+# API 端点配置
+VITE_API_BASE_URL=https://your-api-endpoint.com
+
+# 其他配置...
+```
+
+### 访问服务
+
+构建并运行容器后，可通过以下地址访问服务：
+
+```
+http://localhost:8000
+```
+
+### 停止和移除容器
+
+```bash
+# 停止容器
+docker-compose down
+
+# 或使用 docker 命令
+docker stop emos-uploader
+docker rm emos-uploader
+```
+
+</details>
+
+<details>
+<summary>Cloudflare Tunnel 配置</summary>
+
+由于使用 Cloudflare Tunnel，您可以参考以下步骤进行配置：
+
+1. 安装 Cloudflare Tunnel 客户端：
+
+```bash
+# Windows
+choco install cloudflared
+
+# Linux
+sudo apt-get install cloudflared
+
+# macOS
+brew install cloudflared
+```
+
+2. 登录 Cloudflare Tunnel：
+
+```bash
+cloudflared tunnel login
+```
+
+3. 创建 Tunnel：
+
+```bash
+cloudflared tunnel create emos-uploader
+```
+
+4. 配置 Tunnel：
+
+创建一个 `config.yml` 文件：
+
+```yaml
+url: http://localhost:8000
+# 其他配置...
+```
+
+5. 运行 Tunnel：
+
+```bash
+cloudflared tunnel run emos-uploader
+```
+
+6. 将 Tunnel 与域名关联：
+
+参考 Cloudflare 文档，将您的域名与 Tunnel 关联。
+
+</details>
