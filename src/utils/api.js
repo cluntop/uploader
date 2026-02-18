@@ -56,7 +56,7 @@ const cleanupExpiredCache = () => {
   }
   
   if (removedCount > 0) {
-    console.log(`清理了 ${removedCount} 个过期缓存项`)
+    logger.info(`清理了 ${removedCount} 个过期缓存项`)
   }
 }
 
