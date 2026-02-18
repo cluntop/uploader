@@ -31,8 +31,8 @@ export const API_ENDPOINTS = {
 }
 
 // 分片配置
-export const CHUNK_SIZE = 100 * 1024 * 1024 // 100MB 每片
-export const MIN_CHUNK_SIZE = 100 * 1024 * 1024 // 100MB 最小分片大小
+export const CHUNK_SIZE = 250 * 1024 * 1024 // 100MB 每片
+export const MIN_CHUNK_SIZE = 200 * 1024 * 1024 // 100MB 最小分片大小
 
 
 // API 超时设置（毫秒）
