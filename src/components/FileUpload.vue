@@ -93,32 +93,7 @@
       @dragleave="handleDragLeave"
       @drop.prevent="handleDrop"
     >
-      <div v-if="isRecognizing" class="recognition-progress">
-        <div class="text-3xl mb-2">🔍</div>
-        <div class="text-teal-600 font-medium mb-1">
-          正在识别文件...
-        </div>
-        <div class="text-gray-500 text-xs mb-2">
-          {{ recognitionStep }}
-        </div>
-        <div class="w-full bg-gray-200 rounded-full h-2.5 mb-3">
-          <div 
-            class="bg-teal-600 h-2.5 rounded-full transition-all duration-300" 
-            :style="{ width: recognitionProgress + '%' }"
-          ></div>
-        </div>
-        <div class="flex justify-between text-xs text-gray-500 mb-2">
-          <span>{{ recognitionProgress }}%</span>
-          <span>{{ recognitionSteps.length > 0 ? recognitionSteps[recognitionSteps.length - 1]?.name : '准备中' }}</span>
-        </div>
-        <button 
-          @click="cancelRecognition"
-          class="text-xs text-gray-600 hover:text-gray-800 px-3 py-1 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
-        >
-          🚫 取消识别
-        </button>
-      </div>
-      <div v-else class="upload-area">
+      <div class="upload-area">
         <div class="text-5xl mb-2.5">📁</div>
         <div class="text-teal-600 font-medium mb-1">
           点击或拖拽文件到此处选择
@@ -150,110 +125,56 @@
         </button>
       </div>
       <div class="space-y-2">
-        <div v-for="(file, index) in selectedFiles" :key="index" class="file-item p-3 bg-gray-100 rounded-lg flex justify-between items-center">
-          <div>
-            <div class="font-medium text-gray-800 mb-1">
+        <div v-for="(file, index) in selectedFiles" :key="index" class="file-item p-3 bg-gray-100 rounded-lg">
+          <div class="flex justify-between items-start mb-2">
+            <div class="font-medium text-gray-800">
               {{ file.name }}
             </div>
+            <div class="flex gap-2">
+              <button 
+                v-if="idInputMode === 'auto' || idInputMode === 'manual_recognize'" 
+                @click="recognizeFile(file)"
+                class="text-xs text-gray-600 hover:text-gray-800 px-3 py-1 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+              >
+                🔄 重新识别
+              </button>
+              <button 
+                @click="removeFile(index)"
+                class="text-xs text-red-600 hover:text-red-800 px-3 py-1 bg-red-50 rounded hover:bg-red-100 transition-colors"
+              >
+                🗑️ 删除
+              </button>
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-4 mb-2">
             <div class="text-gray-600 text-sm">
               大小: {{ formatFileSize(file.size) }} | 类型: {{ getUploadTypeLabel() }}
             </div>
+            <div v-if="idInputMode === 'auto' || idInputMode === 'manual_recognize'" class="flex flex-wrap items-center gap-2">
+              <div v-if="recognitionErrors.get(file.name)" class="text-red-600 font-medium text-sm">
+                ❌ 识别失败
+              </div>
+              <div v-else-if="recognitionResults.get(file.name)" class="flex flex-wrap items-center gap-2">
+                <div class="text-green-600 text-sm">
+                  视频标题: {{ recognitionResults.get(file.name).title }}
+                </div>
+                <div class="text-green-600 text-sm">
+                  视频 ID: {{ recognitionResults.get(file.name).video_id }}
+                </div>
+                <div class="text-green-600 text-sm">
+                  类型: {{ getRecognitionTypeLabel(recognitionResults.get(file.name)) }}
+                </div>
+              </div>
+              <div v-else class="text-gray-500 text-sm">
+                {{ idInputMode === 'auto' ? '待识别' : '待手动识别' }}
+              </div>
+            </div>
           </div>
-          <button 
-            @click="removeFile(index)"
-            class="text-xs text-red-600 hover:text-red-800 px-3 py-1 bg-red-50 rounded hover:bg-red-100 transition-colors"
-          >
-            🗑️ 删除
-          </button>
         </div>
       </div>
     </div>
 
-    <!-- 单个文件信息（保持原有逻辑） -->
-    <div v-if="isLoggedIn && selectedFile && selectedFiles.length === 1 && !uploadSummaryInfo" class="file-info mt-5 p-4 bg-gray-100 rounded-lg">
-      <div class="flex justify-between items-start">
-        <div>
-          <div class="font-medium text-gray-800 mb-1">
-            文件名: {{ selectedFile.name }}
-          </div>
-          <div class="text-gray-600 text-sm mb-2">
-            大小: {{ formatFileSize(selectedFile.size) }} | 类型: {{ getUploadTypeLabel() }}
-          </div>
-          <div class="text-gray-600 text-sm" v-if="videoId">
-            视频ID: {{ videoId }}
-          </div>
-        </div>
-        <div class="flex flex-col items-end">
-          <div v-if="idInputMode === 'auto' || idInputMode === 'manual_recognize'" class="mb-2">
-            <span v-if="recognitionResult" class="text-green-600 font-medium">
-              🎯 已识别: {{ recognitionResult.title }}
-              <span class="ml-1 text-xs bg-green-100 px-2 py-0.5 rounded-full text-green-700">
-                {{ getRecognitionTypeLabel() }}
-              </span>
-            </span>
-            <span v-else-if="recognitionError" class="text-red-600 font-medium">
-              ❌ 识别失败
-            </span>
-            <span v-else-if="isRecognizing" class="text-blue-600 font-medium">
-              🔍 识别中... {{ recognitionStep }}
-            </span>
-            <span v-else class="text-gray-500">
-              {{ idInputMode === 'auto' ? '待识别' : '待手动识别' }}
-            </span>
-          </div>
-          <div v-if="recognitionResult" class="mb-2">
-            <div class="text-green-600 text-xs">
-              视频标题: {{ recognitionResult.title }}
-            </div>
-            <div class="text-green-600 text-xs">
-              视频 ID: {{ recognitionResult.video_id }}
-            </div>
-            <div class="text-green-600 text-xs">
-              类型: {{ getRecognitionTypeLabel() }}
-            </div>
-          </div>
-          <div v-if="recognitionError" class="mb-2 text-red-600 text-xs">
-            {{ typeof recognitionError === 'string' ? recognitionError : recognitionError.message || '识别失败，请重试' }}
-            <div class="flex gap-1 mt-1">
-              <button 
-                @click="retryRecognition"
-                class="text-xs text-red-700 hover:text-red-900 px-2 py-0.5 bg-red-100 rounded hover:bg-red-200 transition-colors"
-              >
-                🔄 重试
-              </button>
-              <button 
-                @click="showErrorDetails = !showErrorDetails"
-                class="text-xs text-red-700 hover:text-red-900 px-2 py-0.5 bg-red-100 rounded hover:bg-red-200 transition-colors"
-              >
-                {{ showErrorDetails ? '收起详情' : '查看详情' }}
-              </button>
-            </div>
-            <div v-if="showErrorDetails" class="mt-1 p-2 bg-red-100 rounded-lg text-xs text-red-700 overflow-auto max-h-20">
-              <div v-if="typeof recognitionError === 'object' && recognitionError.steps" class="mb-1">
-                <div class="font-medium mb-0.5">识别步骤详情：</div>
-                <div v-for="(step, index) in recognitionError.steps" :key="index" class="mb-0.5">
-                  <div class="font-medium">{{ step.name }}</div>
-                  <div class="ml-1">{{ step.status }} - {{ step.message }}</div>
-                </div>
-              </div>
-              <div v-else-if="typeof recognitionError === 'object'" class="pre-wrap">
-                {{ JSON.stringify(recognitionError, null, 2) }}
-              </div>
-              <div v-else class="pre-wrap">
-                {{ recognitionError }}
-              </div>
-            </div>
-          </div>
-          <button 
-            v-if="recognitionResult" 
-            @click="resetRecognition"
-            class="text-sm text-gray-500 hover:text-gray-700 mt-1"
-          >
-            🔄 重新识别
-          </button>
-        </div>
-      </div>
-    </div>
+
 
     <!-- 进度条（上传过程中显示，保存期间和保存失败时隐藏） -->
     <div v-if="(isUploading || uploadProgress > 0) && !isSaving && !uploadSummaryInfo && !showResave" class="progress-container mt-4">
@@ -277,7 +198,7 @@
 
     <!-- 上传按钮 -->
     <button
-      v-if="isLoggedIn && selectedFiles.length > 0 && !isUploading && uploadProgress === 0 && !uploadSummaryInfo && !showReupload && !isRecognizing && (idInputMode === 'manual' || recognitionResult)"
+      v-if="isLoggedIn && selectedFiles.length > 0 && !isUploading && uploadProgress === 0 && !uploadSummaryInfo && !showReupload && (idInputMode === 'manual' || Array.from(recognitionResults.values()).length > 0 || selectedFiles.length > 1)"
       @click="handleStartUpload"
       class="mt-4 w-full px-6 py-3 gradient-theme text-white rounded-lg text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
     >
@@ -381,11 +302,11 @@ const allowedFormats = {
 }
 
 // 识别相关状态
-const isRecognizing = ref(false)
+const isRecognizingMap = ref(new Map()) // 存储每个文件的识别状态
 const recognitionProgress = ref(0)
 const recognitionStep = ref('')
-const recognitionResult = ref(null)
-const recognitionError = ref(null)
+const recognitionResults = ref(new Map()) // 存储每个文件的识别结果
+const recognitionErrors = ref(new Map()) // 存储每个文件的识别错误
 const recognitionSteps = ref([])
 const showErrorDetails = ref(false)
 const recognitionAbortController = ref(null)
@@ -411,14 +332,14 @@ const getAcceptHint = () => {
 }
 
 // 获取识别类型标签
-const getRecognitionTypeLabel = () => {
-  if (!recognitionResult.value) return '未知'
+const getRecognitionTypeLabel = (result) => {
+  if (!result) return '未知'
   const labels = {
     'vl': '电影',
     've': '电视剧',
     'tv': '电视剧'
   }
-  return labels[recognitionResult.value.item_type] || recognitionResult.value.item_type || '未知'
+  return labels[result.item_type] || result.item_type || '未知'
 }
 
 // 验证文件类型 - 移除所有限制
@@ -428,10 +349,10 @@ const isValidFile = (file) => {
 
 // 执行文件识别
 const recognizeFile = async (file) => {
-  isRecognizing.value = true
+  isRecognizingMap.value.set(file.name, true)
   recognitionProgress.value = 0
   recognitionStep.value = '分析文件名...'
-  recognitionError.value = null
+  recognitionErrors.value.set(file.name, null)
   recognitionSteps.value = []
   recognitionAbortController.value = new AbortController()
 
@@ -483,17 +404,18 @@ const recognizeFile = async (file) => {
     recognitionStep.value = '识别完成'
     recognitionSteps.value.push({ name: '识别完成', status: '成功', message: '识别成功' })
 
-    recognitionResult.value = result
-    emit('recognitionComplete', result)
+    recognitionResults.value.set(file.name, result)
+    emit('recognitionComplete', result, file.name)
 
     return result
   } catch (error) {
     console.error('识别失败:', error)
-    recognitionError.value = getUserFriendlyMessage(error) || '识别失败，请重试'
+    const errorMessage = getUserFriendlyMessage(error) || '识别失败，请重试'
+    recognitionErrors.value.set(file.name, errorMessage)
     recognitionSteps.value.push({ name: '识别失败', status: '失败', message: error.message || '识别失败' })
     return null
   } finally {
-    isRecognizing.value = false
+    isRecognizingMap.value.set(file.name, false)
     recognitionProgress.value = 100
   }
 }
@@ -503,29 +425,38 @@ const cancelRecognition = () => {
   if (recognitionAbortController.value) {
     recognitionAbortController.value.abort()
   }
-  isRecognizing.value = false
+  // 重置所有文件的识别状态
+  isRecognizingMap.value.forEach((_, fileName) => {
+    isRecognizingMap.value.set(fileName, false)
+  })
   recognitionProgress.value = 0
   recognitionStep.value = ''
-  recognitionError.value = '识别已取消'
   recognitionSteps.value.push({ name: '识别取消', status: '取消', message: '用户取消了识别' })
 }
 
 // 重置识别状态
-const resetRecognition = () => {
-  recognitionResult.value = null
-  recognitionError.value = null
+const resetRecognition = (file) => {
+  if (file) {
+    recognitionResults.value.delete(file.name)
+    recognitionErrors.value.delete(file.name)
+    isRecognizingMap.value.delete(file.name)
+  } else {
+    recognitionResults.value.clear()
+    recognitionErrors.value.clear()
+    isRecognizingMap.value.clear()
+  }
   recognitionSteps.value = []
   recognitionAbortController.value = null
-  selectedFile.value = null
-  emit('fileSelected', null, uploadType.value, null, idInputMode.value)
+  emit('fileSelected', file, uploadType.value, null, idInputMode.value)
 }
 
 // 切换输入方式时重置状态
 const handleInputModeChange = (mode) => {
   idInputMode.value = mode
   // 重置识别状态，确保切换输入方式时不会保留之前的状态
-  recognitionResult.value = null
-  recognitionError.value = null
+  recognitionResults.value.clear()
+  recognitionErrors.value.clear()
+  isRecognizingMap.value.clear()
   recognitionSteps.value = []
   recognitionAbortController.value = null
   // 如果有选中的文件，重新处理
@@ -535,19 +466,21 @@ const handleInputModeChange = (mode) => {
 }
 
 // 重试识别
-const retryRecognition = async () => {
+const retryRecognition = async (file) => {
   if (!isAuthenticated() || !props.isLoggedIn) {
-    recognitionError.value = '未登录，无法搜索视频，请先登录后再重试'
+    if (file) {
+      recognitionErrors.value.set(file.name, '未登录，无法搜索视频，请先登录后再重试')
+    }
     return
   }
   
-  if (selectedFile.value) {
-    await recognizeFile(selectedFile.value)
+  if (file) {
+    await recognizeFile(file)
   }
 }
 
 const handleClick = () => {
-  if (!props.isUploading && !isRecognizing.value) {
+  if (!props.isUploading) {
     fileInputRef.value?.click()
   }
 }
@@ -562,7 +495,7 @@ const handleFileChange = (event) => {
 }
 
 const handleDragOver = () => {
-  if (!props.isUploading && !isRecognizing.value) {
+  if (!props.isUploading) {
     isDragging.value = true
   }
 }
@@ -573,7 +506,7 @@ const handleDragLeave = () => {
 
 const handleDrop = (event) => {
   isDragging.value = false
-  if (props.isUploading || isRecognizing.value) return
+  if (props.isUploading) return
 
   const files = Array.from(event.dataTransfer.files)
   if (files.length > 0) {
@@ -583,8 +516,6 @@ const handleDrop = (event) => {
 
 const processFile = async (file) => {
   // 重置识别状态，确保每次选择文件都重新开始识别
-  recognitionResult.value = null
-  recognitionError.value = null
   recognitionSteps.value = []
   showErrorDetails.value = false
 
@@ -596,7 +527,7 @@ const processFile = async (file) => {
     const result = await recognizeFile(file)
     // 识别完成后，直接使用识别结果进行后续处理
     if (result) {
-      emit('recognitionComplete', result)
+      emit('recognitionComplete', result, file.name)
     }
   } else {
     // 手动输入模式下，直接通知父组件
@@ -606,32 +537,30 @@ const processFile = async (file) => {
 
 const processFiles = async (files) => {
   // 重置识别状态
-  recognitionResult.value = null
-  recognitionError.value = null
   recognitionSteps.value = []
   showErrorDetails.value = false
 
   // 添加到已选择文件列表
   selectedFiles.value = [...selectedFiles.value, ...files]
 
-  // 如果是单个文件，保持原有逻辑
-  if (files.length === 1) {
-    selectedFile.value = files[0]
+  // 对每个文件执行识别
+  for (const file of files) {
     if (idInputMode.value === 'auto' || idInputMode.value === 'manual_recognize') {
-      emit('fileSelected', files[0], uploadType.value, null, idInputMode.value)
-      const result = await recognizeFile(files[0])
-      // 识别完成后，直接使用识别结果进行后续处理
-      if (result) {
-        emit('recognitionComplete', result)
+      if (files.length === 1) {
+        selectedFile.value = file
+        emit('fileSelected', file, uploadType.value, null, idInputMode.value)
       }
+      await recognizeFile(file)
     } else {
-      // 手动输入模式下，直接通知父组件
-      emit('fileSelected', files[0], uploadType.value, null, idInputMode.value)
+      if (files.length === 1) {
+        selectedFile.value = file
+        emit('fileSelected', file, uploadType.value, null, idInputMode.value)
+      }
     }
-  } else {
-    // 多个文件，通知父组件
-    emit('fileSelected', files, uploadType.value, null, idInputMode.value)
   }
+
+  // 通知父组件
+  emit('fileSelected', files.length === 1 ? files[0] : files, uploadType.value, null, idInputMode.value)
 }
 
 const handleStartUpload = () => {
@@ -642,7 +571,15 @@ const handleStartUpload = () => {
       return
     }
 
-    emit('startUpload', selectedFiles.value, uploadType.value, idInputMode.value, recognitionResult.value)
+    // 对于多个文件，我们可以传递第一个文件的识别结果
+    // 或者传递所有文件的识别结果，取决于父组件的期望
+    let recognitionResult = null
+    if (recognitionResults.value.size > 0) {
+      // 获取第一个文件的识别结果
+      recognitionResult = recognitionResults.value.values().next().value
+    }
+
+    emit('startUpload', selectedFiles.value, uploadType.value, idInputMode.value, recognitionResult)
   }
 }
 
@@ -658,7 +595,16 @@ const handleResave = () => {
 
 // 删除单个文件
 const removeFile = (index) => {
+  const fileToRemove = selectedFiles.value[index]
   selectedFiles.value.splice(index, 1)
+  
+  // 从识别状态中移除文件
+  if (fileToRemove) {
+    recognitionResults.value.delete(fileToRemove.name)
+    recognitionErrors.value.delete(fileToRemove.name)
+    isRecognizingMap.value.delete(fileToRemove.name)
+  }
+  
   if (selectedFiles.value.length === 0) {
     selectedFile.value = null
     emit('fileSelected', null, uploadType.value, null, idInputMode.value)
@@ -674,8 +620,9 @@ const removeFile = (index) => {
 const clearAllFiles = () => {
   selectedFiles.value = []
   selectedFile.value = null
-  recognitionResult.value = null
-  recognitionError.value = null
+  recognitionResults.value.clear()
+  recognitionErrors.value.clear()
+  isRecognizingMap.value.clear()
   recognitionSteps.value = []
   recognitionAbortController.value = null
   emit('fileSelected', null, uploadType.value, null, idInputMode.value)
@@ -685,8 +632,9 @@ const clearAllFiles = () => {
 const resetFile = () => {
   selectedFiles.value = []
   selectedFile.value = null
-  recognitionResult.value = null
-  recognitionError.value = null
+  recognitionResults.value.clear()
+  recognitionErrors.value.clear()
+  isRecognizingMap.value.clear()
   recognitionSteps.value = []
   recognitionAbortController.value = null
 }
@@ -694,12 +642,16 @@ const resetFile = () => {
 // 手动识别处理函数
 const handleManualRecognize = async () => {
   if (!isAuthenticated() || !props.isLoggedIn) {
-    recognitionError.value = '未登录，无法搜索视频，请先登录后再重试'
+    if (selectedFile.value) {
+      recognitionErrors.value.set(selectedFile.value.name, '未登录，无法搜索视频，请先登录后再重试')
+    }
     return
   }
   
   if (!selectedFile.value) {
-    recognitionError.value = '请先选择一个文件'
+    if (selectedFile.value) {
+      recognitionErrors.value.set(selectedFile.value.name, '请先选择一个文件')
+    }
     return
   }
   
