@@ -281,6 +281,10 @@ const handleFileSelected = async (file, uploadType, errorMessage, idMode = 'manu
   if (idMode === 'auto') {
     message += '（将使用自动识别功能）'
   }
+  // 如果是多文件，显示文件数量
+  if (Array.isArray(file)) {
+    message = `已选择 ${file.length} 个文件`
+  }
   notification.showStatus(message, 'success')
 }
 
@@ -295,6 +299,37 @@ const handleStartUpload = async (file, uploadType, idMode = 'manual', recognitio
   showResave.value = false
   notification.hideStatus()
 
+  // 检查是否为文件数组
+  if (Array.isArray(file)) {
+    if (file.length === 0) {
+      notification.showStatus('请先选择文件', 'error')
+      return
+    }
+
+    // 遍历文件数组，对每个文件执行上传操作
+    for (let i = 0; i < file.length; i++) {
+      const currentFileItem = file[i]
+      notification.showStatus(`正在上传第 ${i + 1} 个文件 (${currentFileItem.name})...`, 'uploading')
+      
+      try {
+        await uploadSingleFile(currentFileItem, uploadType, idMode, recognitionResult)
+      } catch (error) {
+        console.error(`上传第 ${i + 1} 个文件失败:`, error)
+        notification.showStatus(`上传第 ${i + 1} 个文件失败: ${error.message}`, 'error')
+        // 继续上传下一个文件
+      }
+    }
+
+    notification.showStatus(`上传完成！共处理 ${file.length} 个文件`, 'success')
+    return
+  }
+
+  // 单个文件上传
+  await uploadSingleFile(file, uploadType, idMode, recognitionResult)
+}
+
+// 上传单个文件
+const uploadSingleFile = async (file, uploadType, idMode = 'manual', recognitionResult = null) => {
   try {
     // 自动识别模式
     if (idMode === 'auto') {
@@ -401,6 +436,7 @@ const handleStartUpload = async (file, uploadType, idMode = 'manual', recognitio
       showReupload.value = true
     }
     uploadedFileInfo.value = null
+    throw error
   }
 }
 
@@ -463,6 +499,37 @@ const handleReupload = async (file, uploadType) => {
     return
   }
 
+  // 检查是否为文件数组
+  if (Array.isArray(file)) {
+    if (file.length === 0) {
+      notification.showStatus('错误：没有可重新上传的文件！', 'error')
+      return
+    }
+
+    // 遍历文件数组，对每个文件执行重新上传操作
+    for (let i = 0; i < file.length; i++) {
+      const currentFileItem = file[i]
+      notification.showStatus(`正在重新上传第 ${i + 1} 个文件 (${currentFileItem.name})...`, 'uploading')
+      
+      try {
+        await reuploadSingleFile(currentFileItem, uploadType)
+      } catch (error) {
+        console.error(`重新上传第 ${i + 1} 个文件失败:`, error)
+        notification.showStatus(`重新上传第 ${i + 1} 个文件失败: ${error.message}`, 'error')
+        // 继续上传下一个文件
+      }
+    }
+
+    notification.showStatus(`重新上传完成！共处理 ${file.length} 个文件`, 'success')
+    return
+  }
+
+  // 单个文件重新上传
+  await reuploadSingleFile(file, uploadType)
+}
+
+// 重新上传单个文件
+const reuploadSingleFile = async (file, uploadType) => {
   // 检查是否有有效的上传令牌
   if (!uploadToken.uploadToken.value || !uploadToken.uploadToken.value.upload_url) {
     notification.showStatus('错误：上传令牌已失效，请重新选择文件！', 'error')
@@ -479,7 +546,7 @@ const handleReupload = async (file, uploadType) => {
 
       // 如果令牌获取成功,自动开始上传
       if (uploadToken.uploadToken.value) {
-        await handleStartUpload(file, uploadType)
+        await uploadSingleFile(file, uploadType)
       }
     } catch (error) {
       console.error('重新获取令牌失败:', error)
@@ -529,6 +596,7 @@ const handleReupload = async (file, uploadType) => {
     console.error('文件重新上传失败:', error)
     showReupload.value = true
     uploadedFileInfo.value = null
+    throw error
   }
 }
 

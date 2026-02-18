@@ -1,7 +1,8 @@
 import { ref, onMounted, computed } from 'vue'
 import { BASE_URL, ERROR_CONFIG } from '../config'
 import api from '../utils/api'
-import { setToken, getToken, isAuthenticated as isAuthAuthenticated, getUserInfo as getAuthUserInfo, clearAuthInfo, checkAuthStatus as authCheckAuthStatus } from '../utils/auth'
+import { setToken, getToken, isAuthenticated as isAuthAuthenticated, getUserInfo as getAuthUserInfo, clearAuthInfo, checkAuthStatus as authCheckAuthStatus, buildAuthUrl } from '../utils/auth'
+import logger from '../utils/logger'
 
 export function useAuth() {
   const token = ref('')
@@ -41,16 +42,24 @@ export function useAuth() {
       const savedAvatar = sessionStorage.getItem('avatar')
 
       if (savedToken && savedUsername && savedUserId) {
-        return {
+        const fallbackUserInfo = {
           token: savedToken,
           username: savedUsername,
           user_id: savedUserId,
           avatar: savedAvatar
         }
+        logger.debug('使用后备方案获取用户信息', {
+          userId: savedUserId,
+          username: savedUsername
+        })
+        return fallbackUserInfo
       }
       return null
     } catch (err) {
-      console.error('获取用户信息失败:', err)
+      logger.error('获取用户信息失败', {
+        error: err.message,
+        stack: err.stack
+      })
       return null
     }
   }
@@ -73,9 +82,18 @@ export function useAuth() {
       avatar.value = userAvatar || ''
       isLoggedIn.value = true
       error.value = null
+      
+      logger.success('保存用户信息成功', {
+        userId,
+        username: userName,
+        hasAvatar: !!userAvatar
+      })
       return true
     } catch (err) {
-      console.error('保存用户信息失败:', err)
+      logger.error('保存用户信息失败', {
+        error: err.message,
+        stack: err.stack
+      })
       error.value = '保存用户信息失败'
       return false
     }
@@ -96,8 +114,13 @@ export function useAuth() {
       error.value = null
       // 清除 API 缓存
       api.clearCache()
+      
+      logger.info('清除用户信息成功')
     } catch (err) {
-      console.error('清除用户信息失败:', err)
+      logger.error('清除用户信息失败', {
+        error: err.message,
+        stack: err.stack
+      })
       error.value = '清除用户信息失败'
     }
   }
@@ -114,7 +137,10 @@ export function useAuth() {
         avatar.value = userInfo.avatar || sessionStorage.getItem('avatar') || ''
         isLoggedIn.value = true
         error.value = null
-        console.log('用户已登录:', userInfo)
+        logger.info('用户已登录', {
+          userId: userInfo.user_id,
+          username: userInfo.username
+        })
       } else {
         // 检查是否有 token 但没有完整用户信息
         const tokenFromStorage = sessionStorage.getItem('token')
@@ -125,13 +151,16 @@ export function useAuth() {
           avatar.value = sessionStorage.getItem('avatar') || ''
           isLoggedIn.value = true
           error.value = null
-          console.log('用户已登录（仅token）')
+          logger.info('用户已登录（仅token）')
         } else {
-          console.log('用户未登录')
+          logger.info('用户未登录')
         }
       }
     } catch (err) {
-      console.error('更新用户状态失败:', err)
+      logger.error('更新用户状态失败', {
+        error: err.message,
+        stack: err.stack
+      })
       error.value = '更新用户状态失败'
     }
   }
@@ -165,7 +194,9 @@ export function useAuth() {
     if (!isValid) {
       avatar.value = ''
       sessionStorage.setItem('avatar', '')
-      console.log('头像图片无效，已设置为默认头像')
+      logger.warn('头像图片无效，已设置为默认头像', {
+        invalidAvatarUrl: avatar.value
+      })
     }
   }
 
@@ -178,9 +209,17 @@ export function useAuth() {
       const expiryTime = Date.now() + expiry
       sessionStorage.setItem('original_url', url)
       sessionStorage.setItem('original_url_expiry', expiryTime.toString())
-      console.log('原始链接保存成功:', url)
+      
+      logger.info('原始链接保存成功', {
+        url,
+        expiry: expiryTime,
+        expiryFormatted: new Date(expiryTime).toISOString()
+      })
     } catch (error) {
-      console.error('保存原始链接失败:', error)
+      logger.error('保存原始链接失败', {
+        error: error.message,
+        stack: error.stack
+      })
     }
   }
 
@@ -195,14 +234,20 @@ export function useAuth() {
       if (expiry) {
         const expiryTime = parseInt(expiry)
         if (Date.now() > expiryTime) {
-          console.warn('原始链接已过期')
+          logger.warn('原始链接已过期', {
+            expiryTime: new Date(expiryTime).toISOString(),
+            currentTime: new Date().toISOString()
+          })
           clearOriginalUrl()
           return null
         }
       }
       return url
     } catch (error) {
-      console.error('获取原始链接失败:', error)
+      logger.error('获取原始链接失败', {
+        error: error.message,
+        stack: error.stack
+      })
       return null
     }
   }
@@ -212,9 +257,12 @@ export function useAuth() {
     try {
       sessionStorage.removeItem('original_url')
       sessionStorage.removeItem('original_url_expiry')
-      console.log('原始链接已清除')
+      logger.info('原始链接已清除')
     } catch (error) {
-      console.error('清除原始链接失败:', error)
+      logger.error('清除原始链接失败', {
+        error: error.message,
+        stack: error.stack
+      })
     }
   }
 
@@ -231,7 +279,10 @@ export function useAuth() {
 
       // 处理登录错误
       if (errorParam) {
-        console.error('登录回调错误:', errorParam, errorDescription)
+        logger.error('登录回调错误', {
+          error: errorParam,
+          description: errorDescription
+        })
         switch (errorParam) {
           case 'network_error':
             error.value = '网络连接失败，请检查网络设置后重试'
@@ -255,14 +306,17 @@ export function useAuth() {
       }
 
       if (callbackToken && callbackUserId) {
-        console.log('检测到登录回调，保存用户信息')
+        logger.info('检测到登录回调，保存用户信息', {
+          userId: callbackUserId,
+          username: callbackUsername
+        })
         const saved = saveUserInfo(callbackToken, callbackUsername, callbackUserId, callbackAvatar)
 
         if (saved) {
           // 获取原始链接并尝试重定向
           const originalUrl = getOriginalUrl()
           if (originalUrl) {
-            console.log('重定向回原始链接:', originalUrl)
+            logger.info('重定向回原始链接', { originalUrl })
             clearOriginalUrl()
             // 清除 URL 中的参数
             const cleanUrl = window.location.origin + window.location.pathname
@@ -279,12 +333,21 @@ export function useAuth() {
           return false
         }
       } else {
-        console.log('登录回调参数不完整')
+        logger.warn('登录回调参数不完整', {
+          hasToken: !!callbackToken,
+          hasUserId: !!callbackUserId,
+          hasUsername: !!callbackUsername,
+          hasAvatar: !!callbackAvatar
+        })
         error.value = '登录回调参数不完整'
         return false
       }
     } catch (err) {
-      console.error('处理登录回调失败:', err)
+      logger.error('处理登录回调失败', {
+        error: err.message,
+        stack: err.stack,
+        errorName: err.name
+      })
       if (err.name === 'TypeError') {
         error.value = 'URL 参数解析失败'
       } else if (err.name === 'SecurityError') {
@@ -303,14 +366,16 @@ export function useAuth() {
       const currentUrl = window.location.href
       saveOriginalUrl(currentUrl)
       
-      const uuid = generateUUID()
-      const name = 'emos-upload'
-      const callbackUrl = encodeURIComponent(window.location.origin + window.location.pathname)
-      const loginUrl = `https://emos.best/link?uuid=${uuid}&name=${encodeURIComponent(name)}&url=${callbackUrl}`
-      console.log('跳转到登录页面:', loginUrl)
-      window.location.href = loginUrl
+      // 使用buildAuthUrl函数生成授权URL
+      const authUrl = buildAuthUrl()
+      logger.info('跳转到登录页面', { authUrl })
+      window.location.href = authUrl
     } catch (err) {
-      console.error('登录失败:', err)
+      logger.error('登录失败', {
+        error: err.message,
+        stack: err.stack,
+        errorName: err.name
+      })
       if (err.name === 'TypeError') {
         error.value = '生成登录链接失败'
       } else if (err.name === 'SecurityError') {
@@ -324,10 +389,14 @@ export function useAuth() {
   // 登出
   const logout = () => {
     try {
-      console.log('用户登出')
+      logger.info('用户登出')
       clearUserInfo()
     } catch (err) {
-      console.error('登出失败:', err)
+      logger.error('登出失败', {
+        error: err.message,
+        stack: err.stack,
+        errorName: err.name
+      })
       if (err.name === 'TypeError') {
         error.value = '清除用户信息失败'
       } else if (err.name === 'SecurityError') {
@@ -350,7 +419,11 @@ export function useAuth() {
       // 暂时返回 true，假设令牌有效
       return true
     } catch (err) {
-      console.error('验证令牌失败:', err)
+      logger.error('验证令牌失败', {
+        error: err.message,
+        stack: err.stack,
+        errorName: err.name
+      })
       if (err.name === 'NetworkError' || err.message.includes('网络')) {
         error.value = '网络连接失败，无法验证令牌'
       } else if (err.name === 'UnauthorizedError' || err.message.includes('未授权')) {
@@ -380,7 +453,10 @@ export function useAuth() {
         await validateAvatar()
       }
     } catch (err) {
-      console.error('初始化认证状态失败:', err)
+      logger.error('初始化认证状态失败', {
+        error: err.message,
+        stack: err.stack
+      })
       error.value = '初始化认证状态失败'
     }
   })

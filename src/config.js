@@ -26,12 +26,14 @@ export const API_ENDPOINTS = {
   VIDEO_INFO: '/api/upload/video/base',
   UPLOAD_TOKEN: '/api/upload/getUploadToken',
   SAVE_VIDEO: '/api/upload/video/save',
-  SAVE_SUBTITLE: '/api/upload/subtitle/save'
+  SAVE_SUBTITLE: '/api/upload/subtitle/save',
+  SAVE_UPLOAD: '/api/upload/video/save'
 }
 
 // 分片配置
 export const CHUNK_SIZE = 100 * 1024 * 1024 // 100MB 每片
-export const MIN_CHUNK_SIZE = 50 * 1024 * 1024 // 50MB 最小分片大小
+export const MIN_CHUNK_SIZE = 100 * 1024 * 1024 // 100MB 最小分片大小
+
 
 // API 超时设置（毫秒）
 export const API_TIMEOUT = 30 * 1000 // 30秒

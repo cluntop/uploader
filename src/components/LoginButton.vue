@@ -3,16 +3,47 @@
     <button
       v-if="!isLoggedIn"
       @click="handleLogin"
-      class="login-button"
       :disabled="isLoading"
     >
-      <span v-if="isLoading" class="loading-spinner"></span>
+      <div class="svg-wrapper-1">
+        <div class="svg-wrapper">
+          <svg
+            xmlns=" `http://www.w3.org/2000/svg` "
+            viewBox="0 0 24 24"
+            width="24"
+            height="24"
+          >
+            <path fill="none" d="M0 0h24v24H0z"></path>
+            <path
+              fill="currentColor"
+              d="M1.946 9.315c-.522-.174-.527-.455.01-.634l19.087-6.362c.529-.176.832.12.684.638l-5.454 19.086c-.15.529-.455.547-.679.045L12 14l6-8-8 6-8.054-2.685z"
+            ></path>
+          </svg>
+        </div>
+      </div>
       <span>{{ isLoading ? '跳转中...' : '登录' }}</span>
     </button>
     <div v-else class="user-info">
-      <img v-if="avatar" :src="avatar" alt="用户头像" class="user-avatar" />
       <span class="username">{{ username || '用户' }}</span>
-      <button @click="handleLogout" class="logout-button">退出</button>
+      <button @click="handleLogout">
+        <div class="svg-wrapper-1">
+          <div class="svg-wrapper">
+            <svg
+              xmlns=" `http://www.w3.org/2000/svg` "
+              viewBox="0 0 24 24"
+              width="24"
+              height="24"
+            >
+              <path fill="none" d="M0 0h24v24H0z"></path>
+              <path
+                fill="currentColor"
+                d="M1.946 9.315c-.522-.174-.527-.455.01-.634l19.087-6.362c.529-.176.832.12.684.638l-5.454 19.086c-.15.529-.455.547-.679.045L12 14l6-8-8 6-8.054-2.685z"
+              ></path>
+            </svg>
+          </div>
+        </div>
+        <span>登出</span>
+      </button>
     </div>
   </div>
 </template>
@@ -53,27 +84,52 @@ onMounted(() => {
   gap: 10px;
 }
 
-.login-button {
+button {
+  font-family: inherit;
+  font-size: 14px;
+  background: royalblue;
+  color: white;
+  padding: 0.5em 0.8em;
+  padding-left: 0.7em;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  color: white;
   border: none;
   border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
+  overflow: hidden;
+  transition: all 0.2s;
   cursor: pointer;
-  transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
-.login-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+button span {
+  display: block;
+  margin-left: 0.3em;
+  transition: all 0.3s ease-in-out;
 }
 
-.login-button:disabled {
+button svg {
+  display: block;
+  transform-origin: center center;
+  transition: transform 0.3s ease-in-out;
+}
+
+button:hover .svg-wrapper {
+  animation: fly-1 0.6s ease-in-out infinite alternate;
+}
+
+button:hover svg {
+  transform: translateX(1.2em) rotate(45deg) scale(1.1);
+}
+
+button:hover span {
+  transform: translateX(5em);
+}
+
+button:active {
+  transform: scale(0.95);
+}
+
+button:disabled {
   opacity: 0.7;
   cursor: not-allowed;
 }
@@ -85,11 +141,22 @@ onMounted(() => {
   border-top: 2px solid white;
   border-radius: 50%;
   animation: spin 1s linear infinite;
+  margin-right: 8px;
 }
 
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+@keyframes fly-1 {
+  from {
+    transform: translateY(0.1em);
+  }
+
+  to {
+    transform: translateY(-0.1em);
+  }
 }
 
 .user-info {
@@ -102,32 +169,11 @@ onMounted(() => {
   border-radius: 8px;
 }
 
-.user-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  object-fit: cover;
-}
+
 
 .username {
   font-size: 14px;
   font-weight: 500;
-  color: #334155;
-}
-
-.logout-button {
-  padding: 4px 8px;
-  background: #f1f5f9;
-  color: #64748b;
-  border: none;
-  border-radius: 4px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.logout-button:hover {
-  background: #e2e8f0;
   color: #334155;
 }
 </style>

@@ -10,7 +10,7 @@
  */
 
 import api from './api'
-import { API_ENDPOINTS } from '../config'
+import { API_ENDPOINTS, BASE_URL } from '../config'
 import { isAuthenticated, getToken } from './auth'
 import { handleError, createError, ERROR_TYPES } from './errorHandler'
 
@@ -106,14 +106,51 @@ const getVideoId = async (params, logger = console) => {
 // 获取视频目录树
 const getVideoTree = async (params, logger = console) => {
   try {
-    logger.log(`获取视频目录树:`, params)
-    const response = await api.get(API_ENDPOINTS.VIDEO_TREE, {
-      params
+    // 构建符合接口规范的参数
+    const treeParams = {
+      type: params.type || '',
+      title: params.title || '',
+      tmdb_id: params.tmdb_id || params.tmdbId || '',
+      todb_id: params.todb_id || params.todbId || '',
+      video_id: params.video_id || params.videoId || ''
+    }
+    
+    // 移除空参数
+    Object.keys(treeParams).forEach(key => {
+      if (!treeParams[key]) {
+        delete treeParams[key]
+      }
     })
+    
+    logger.log(`获取视频目录树参数:`, treeParams)
+    
+    // 构建完整的 API URL 用于调试
+    const apiUrl = `${BASE_URL}${API_ENDPOINTS.VIDEO_TREE}${Object.keys(treeParams).length > 0 ? '?' : ''}${new URLSearchParams(treeParams).toString()}`
+    logger.log(`视频目录树 API URL:`, apiUrl)
+    
+    const response = await api.get(API_ENDPOINTS.VIDEO_TREE, {
+      params: treeParams
+    })
+    
     logger.log(`获取视频目录树成功:`, response)
+    
+    // 提取关键信息
+    if (response) {
+      logger.log(`视频类型: ${response.video_type || '未知'}`)
+      logger.log(`项目类型: ${response.item_type || '未知'}`)
+      logger.log(`标题: ${response.title || '未知'}`)
+      logger.log(`TMDB ID: ${response.tmdb_id || '未知'}`)
+      
+      if (response.seasons && response.seasons.length > 0) {
+        logger.log(`季数: ${response.seasons.length}`)
+        logger.log(`首个季: ${response.seasons[0].season_title || `第 ${response.seasons[0].season_number} 季`}`)
+      }
+    }
+    
     return response
   } catch (e) {
     logger.error('获取视频目录树失败:', e)
+    logger.error(`错误详情: ${e.message}`)
     return null
   }
 }
@@ -133,6 +170,82 @@ const getMediaList = async (params, logger = console) => {
   }
 }
 
+// 视频搜索轮询
+const searchVideosWithPolling = async (params, logger = console, maxResults = 50) => {
+  let results = []
+  let lastId = null
+  let page = 1
+  const pageSize = 15
+  
+  logger.log(`开始视频搜索轮询，最大结果数: ${maxResults}`)
+  logger.log(`搜索参数:`, params)
+  
+  try {
+    do {
+      // 构建搜索参数
+      const searchParams = {
+        last_id: lastId || '',
+        tmdb_id: params.tmdb_id || params.tmdbId || '',
+        todb_id: params.todb_id || params.todbId || '',
+        video_id: params.video_id || params.videoId || '',
+        type: params.type || '',
+        title: params.title || '',
+        with_genre: params.with_genre || '',
+        sort_by: params.sort_by || '',
+        page: page,
+        page_size: pageSize
+      }
+      
+      // 移除空参数
+      Object.keys(searchParams).forEach(key => {
+        if (!searchParams[key]) {
+          delete searchParams[key]
+        }
+      })
+      
+      logger.log(`搜索轮询第 ${page} 页，参数:`, searchParams)
+      
+      // 构建完整的 API URL 用于调试
+      const apiUrl = `${BASE_URL}${API_ENDPOINTS.VIDEO_SEARCH}${Object.keys(searchParams).length > 0 ? '?' : ''}${new URLSearchParams(searchParams).toString()}`
+      logger.log(`视频搜索 API URL:`, apiUrl)
+      
+      const response = await api.get(API_ENDPOINTS.VIDEO_SEARCH, {
+        params: searchParams
+      })
+      
+      logger.log(`搜索轮询第 ${page} 页结果:`, response)
+      
+      if (response && response.items && response.items.length > 0) {
+        results = [...results, ...response.items]
+        lastId = response.items[response.items.length - 1].video_id
+        page++
+        
+        logger.log(`已获取 ${results.length} 个结果，last_id: ${lastId}`)
+        
+        // 检查是否达到最大结果数
+        if (results.length >= maxResults) {
+          logger.log(`已达到最大结果数 ${maxResults}`)
+          break
+        }
+      } else {
+        logger.log(`搜索轮询结束，无更多结果`)
+        break
+      }
+      
+      // 短暂延迟，避免请求过于频繁
+      await new Promise(resolve => setTimeout(resolve, 500))
+    } while (true)
+    
+    logger.log(`视频搜索轮询完成，共获取 ${results.length} 个结果`)
+    return results
+  } catch (e) {
+    logger.error('视频搜索轮询失败:', e)
+    logger.error(`错误详情: ${e.message}`)
+    // 即使出错，也返回已获取的结果
+    return results
+  }
+}
+
 // 外部 API 识别
 const recognizeByApi = async (filename, logger = console, maxRetries = 3, retryDelay = 1000) => {
   let retries = 0
@@ -140,6 +253,7 @@ const recognizeByApi = async (filename, logger = console, maxRetries = 3, retryD
   while (retries < maxRetries) {
     try {
       logger.log(`调用外部 API 识别 (${retries + 1}/${maxRetries}): ${filename}`)
+      logger.log(`API URL: ${RECOGNIZE_API}?path=${encodeURIComponent(filename)}`)
       
       // 添加超时设置
       const controller = new AbortController()
@@ -158,10 +272,34 @@ const recognizeByApi = async (filename, logger = console, maxRetries = 3, retryD
       
       const data = await response.json()
       logger.log(`API 识别结果:`, data)
-      return data
+      
+      // 增强数据提取逻辑
+      if (data) {
+        // 优先提取 media_info 中的 tmdb_id
+        if (data.media_info && data.media_info.tmdb_id) {
+          logger.log(`成功提取 media_info.tmdb_id: ${data.media_info.tmdb_id}`)
+          
+          // 构建返回对象，确保包含所有必要信息
+          const result = {
+            ...data,
+            tmdb_id: data.media_info.tmdb_id
+          }
+          return result
+        } else if (data.tmdb_id) {
+          logger.log(`成功提取 tmdb_id: ${data.tmdb_id}`)
+          return data
+        } else {
+          logger.log('未找到 tmdb_id，返回完整数据')
+          return data
+        }
+      }
+      
+      logger.log('API 返回空数据')
+      return null
     } catch (e) {
       retries++
       logger.error(`API 识别失败 (${retries}/${maxRetries}):`, e)
+      logger.error(`错误详情: ${e.message}`)
       
       if (retries >= maxRetries) {
         logger.error('达到最大重试次数，API 识别失败')
@@ -418,12 +556,15 @@ const searchItemId = async (filename, logger = console) => {
         tmdb_id: tmdbId
       }
       
+      logger.log('目录树查询参数:', treeParams)
       const treeResult = await getVideoTree(treeParams, logger)
       if (treeResult && treeResult.success) {
         steps.push({ name: '目录树查询', status: '成功', message: `通过目录树找到视频信息` })
+        logger.log('目录树查询结果:', treeResult)
         // 可以从目录树结果中获取更多信息
       } else {
         steps.push({ name: '目录树查询', status: '失败', message: '目录树查询无结果，使用常规方法' })
+        logger.log('目录树查询无结果:', treeResult)
       }
       
       const params = {
@@ -433,7 +574,9 @@ const searchItemId = async (filename, logger = console) => {
         episode_number: searchType === 'tv' ? episode : undefined
       }
       
+      logger.log('获取视频 ID 参数:', params)
       const result = await getVideoId(params, logger)
+      logger.log('获取视频 ID 结果:', result)
       
       if (searchType === 'tv') {
         if (result.episode_info && result.episode_info.item_id) {
@@ -464,7 +607,20 @@ const searchItemId = async (filename, logger = console) => {
       }
     } catch (e) {
       logger.error('精准定位失败:', e)
-      steps.push({ name: '精准定位', status: '失败', message: `精准定位失败: ${e.message}` })
+      logger.error('错误详情:', {
+        message: e.message,
+        stack: e.stack,
+        type: e.type,
+        code: e.code
+      })
+      
+      // 处理错误消息，避免在识别阶段显示上传相关的错误
+      let errorMessage = e.message
+      if (errorMessage.includes('视频正在合成中')) {
+        errorMessage = '视频信息获取失败，请稍后重试'
+      }
+      
+      steps.push({ name: '精准定位', status: '失败', message: `精准定位失败: ${errorMessage}` })
     }
   }
   
@@ -507,8 +663,14 @@ const searchItemId = async (filename, logger = console) => {
   // 搜索视频
   steps.push({ name: '视频搜索', status: '开始', message: `搜索 ${searchType === 'tv' ? '电视剧' : '电影'}: ${searchTitle}` })
   try {
-    // 使用视频列表 API 搜索
-    const searchResults = await searchVideoId(searchTitle, logger)
+    // 使用视频搜索 API 进行轮询搜索
+    const searchParams = {
+      title: searchTitle,
+      type: searchType,
+      sort_by: 'relevance' // 按相关性排序
+    }
+    
+    const searchResults = await searchVideosWithPolling(searchParams, logger)
     
     if (searchResults.length > 0) {
       // 优先选择有 tmdb_id 的结果
@@ -641,6 +803,7 @@ const searchItemId = async (filename, logger = console) => {
 export {
   searchItemId,
   searchVideoId,
+  searchVideosWithPolling,
   addManualMap,
   clearManualMap,
   getManualMap,

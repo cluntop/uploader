@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { CHUNK_SIZE, MIN_CHUNK_SIZE, NETWORK_CONFIG, ERROR_CONFIG } from '../config'
+import { API_ENDPOINTS } from '../config'
 import api from '../utils/api'
 import { searchItemId, addManualMap } from '../utils/recognize'
 
@@ -174,7 +175,7 @@ export function useUpload() {
         errorMessage = ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR
       } else if (error.message.includes('50')) {
         errorMessage = ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR
-      } else if (error.message.includes('422') || error.message.includes('视频正在合成中')) {
+      } else if (error.message.includes('视频正在合成中')) {
         errorMessage = '视频正在合成中'
       } else if (error.message.includes('401') || error.message.includes('认证')) {
         errorMessage = ERROR_CONFIG.ERROR_MESSAGES.AUTH_ERROR
@@ -226,7 +227,7 @@ export function useUpload() {
         errorMessage = ERROR_CONFIG.ERROR_MESSAGES.NETWORK_ERROR
       } else if (error.message.includes('50')) {
         errorMessage = ERROR_CONFIG.ERROR_MESSAGES.SERVER_ERROR
-      } else if (error.message.includes('422') || error.message.includes('视频正在合成中')) {
+      } else if (error.message.includes('视频正在合成中')) {
         errorMessage = '视频正在合成中'
       } else if (error.message.includes('401') || error.message.includes('认证')) {
         errorMessage = ERROR_CONFIG.ERROR_MESSAGES.AUTH_ERROR
@@ -373,9 +374,35 @@ export function useUpload() {
 
   // 上传文件（自动选择分片或完整上传，支持断点续传）
   const uploadFile = async (file, uploadUrl, onProgress) => {
+    // 基本验证
     if (!file || !uploadUrl) {
       if (onProgress) {
         onProgress('文件或上传 URL 不能为空', 'error')
+      }
+      return null
+    }
+
+    // 文件属性验证
+    if (!file.name || typeof file.name !== 'string' || file.name.trim() === '') {
+      if (onProgress) {
+        onProgress('文件名无效', 'error')
+      }
+      return null
+    }
+
+    if (!file.size || typeof file.size !== 'number' || file.size <= 0) {
+      if (onProgress) {
+        onProgress('文件大小无效', 'error')
+      }
+      return null
+    }
+
+    // 上传URL验证
+    try {
+      new URL(uploadUrl)
+    } catch {
+      if (onProgress) {
+        onProgress('上传 URL 格式无效', 'error')
       }
       return null
     }
@@ -434,7 +461,7 @@ export function useUpload() {
         errorMessage = '网络连接失败，请检查您的网络'
       } else if (error.message.includes('50')) {
         errorMessage = '服务器错误，请稍后重试'
-      } else if (error.message.includes('422') || error.message.includes('视频正在合成中')) {
+      } else if (error.message.includes('视频正在合成中')) {
         errorMessage = '视频正在合成中，请稍后再试'
       } else if (error.message.includes('401') || error.message.includes('认证')) {
         errorMessage = '认证失败，请重新登录'
@@ -442,6 +469,8 @@ export function useUpload() {
         errorMessage = '权限不足，无法上传文件'
       } else if (error.message.includes('404')) {
         errorMessage = '上传地址无效，请重新获取'
+      } else if (error.message.includes('422') || error.message.includes('验证') || error.message.includes('Validation')) {
+        errorMessage = '文件验证失败，请检查文件是否符合要求'
       } else {
         errorMessage = error.message || errorMessage
       }
@@ -458,12 +487,40 @@ export function useUpload() {
 
   // 完整上传流程（包含识别和保存）
   const uploadWithRecognition = async (file, onProgress) => {
+    console.log('=== 开始完整上传流程 ===')
+    
+    // 基本验证
     if (!file) {
+      console.error('上传流程错误: 文件不能为空')
       if (onProgress) {
         onProgress('文件不能为空', 'error')
       }
       return null
     }
+
+    // 文件属性验证
+    if (!file.name || typeof file.name !== 'string' || file.name.trim() === '') {
+      console.error('上传流程错误: 文件名无效')
+      if (onProgress) {
+        onProgress('文件名无效', 'error')
+      }
+      return null
+    }
+
+    if (!file.size || typeof file.size !== 'number' || file.size <= 0) {
+      console.error('上传流程错误: 文件大小无效')
+      if (onProgress) {
+        onProgress('文件大小无效', 'error')
+      }
+      return null
+    }
+
+    console.log('上传文件:', {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      lastModified: file.lastModified
+    })
 
     // 重置进度
     uploadProgress.value = 0
@@ -475,9 +532,12 @@ export function useUpload() {
       if (onProgress) {
         onProgress('正在识别文件...', 'uploading')
       }
+      console.log('步骤1: 开始识别文件')
 
       // 识别文件
+      console.log('调用 searchItemId 识别文件:', file.name)
       const info = await searchItemId(file.name, console)
+      console.log('文件识别结果:', info)
       
       if (!info) {
         throw new Error('文件识别失败')
@@ -486,17 +546,34 @@ export function useUpload() {
       if (onProgress) {
         onProgress(`识别成功: ${info.title}`, 'uploading')
       }
+      console.log('文件识别成功:', info.title)
+
+      // 验证识别结果
+      if (!info.item_type || !info.video_id) {
+        throw new Error('文件识别结果不完整')
+      }
 
       // 步骤1: 获取上传基础信息
       if (onProgress) {
         onProgress('获取上传基础信息...', 'uploading')
       }
+      console.log('步骤2: 获取上传基础信息')
+      console.log('获取上传基础信息参数:', {
+        item_type: info.item_type,
+        item_id: info.video_id
+      })
       await getUploadBase(info.item_type, info.video_id)
+      console.log('获取上传基础信息成功')
 
       // 确定文件类型
       const ext = file.name.split('.').pop().toLowerCase()
       const isSubtitle = ['srt', 'ass', 'ssa', 'vtt'].includes(ext)
       const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext)
+      console.log('文件类型分析:', {
+        ext,
+        isSubtitle,
+        isImage
+      })
       
       // MIME 类型映射
       const mimeMap = {
@@ -515,17 +592,20 @@ export function useUpload() {
       }
       
       const mime = mimeMap[ext] || 'application/octet-stream'
+      console.log('MIME 类型:', mime)
 
       // 步骤2: 获取上传令牌
       if (onProgress) {
         onProgress('获取上传令牌...', 'uploading')
       }
+      console.log('步骤3: 获取上传令牌')
       let uploadType = 'video'
       if (isSubtitle) {
         uploadType = 'subtitle'
       } else if (isImage) {
         uploadType = 'image'
       }
+      console.log('上传类型:', uploadType)
       
       const tokenPayload = {
         type: uploadType,
@@ -534,45 +614,57 @@ export function useUpload() {
         file_size: file.size,
         file_storage: 'default'
       }
+      console.log('获取上传令牌参数:', tokenPayload)
 
       const tokenData = await getUploadToken(tokenPayload)
+      console.log('获取上传令牌结果:', tokenData)
 
       if (!tokenData.data || !tokenData.data.upload_url) {
         throw new Error('获取上传令牌失败')
       }
 
       const uploadUrl = tokenData.data.upload_url
+      console.log('上传 URL:', uploadUrl)
 
       if (onProgress) {
         onProgress('正在上传文件...', 'uploading')
       }
+      console.log('步骤4: 开始上传文件')
 
       // 上传文件
       await uploadFile(file, uploadUrl, onProgress)
+      console.log('文件上传成功')
 
       // 步骤3: 保存上传结果
       if (onProgress) {
         onProgress('保存上传结果...', 'uploading')
       }
+      console.log('步骤5: 保存上传结果')
       const savePayload = {
         item_type: info.item_type,
         item_id: info.video_id,
-        file_id: tokenData.file_id
+        file_id: tokenData.file_id || tokenData.data?.file_id || ''
       }
 
       if (isSubtitle && info.media_uuid) {
         savePayload.media_uuid = info.media_uuid
       }
+      console.log('保存上传结果参数:', savePayload)
 
       const saveResponse = await saveUpload(savePayload, isSubtitle)
+      console.log('保存上传结果成功:', saveResponse)
 
       if (onProgress) {
         onProgress('上传完成！', 'success')
       }
+      console.log('=== 上传流程完成 ===')
 
       return saveResponse
     } catch (error) {
-      console.error('上传流程异常:', error)
+      console.error('=== 上传流程异常 ===')
+      console.error('错误消息:', error.message)
+      console.error('错误堆栈:', error.stack)
+      console.error('错误详情:', error)
       if (onProgress) {
         onProgress(`上传出错: ${error.message}`, 'error')
       }
@@ -580,6 +672,7 @@ export function useUpload() {
     } finally {
       isUploading.value = false
       currentUploadController = null
+      console.log('=== 上传流程结束 ===')
     }
   }
 

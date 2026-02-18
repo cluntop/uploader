@@ -9,69 +9,12 @@
  * Copyright (c) 2025 by zhiyixn, All Rights Reserved. 
 -->
 <template>
-  <div class="gradient-theme rounded-xl p-5 shadow-lg w-full lg:flex-[0_0_auto] lg:min-w-[320px] shrink-0 self-start mb-4">
-    <!-- 未登录状态 -->
-    <div v-if="!isLoggedIn" class="flex items-center gap-4 text-white">
-      <div class="bg-white/30 w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-sm overflow-hidden">
-        <img src="../assets/avatar.png" alt="用户头像" class="w-full h-full object-cover" />
-      </div>
-      <div class="flex-1 text-base font-medium">未登录</div>
-    </div>
-
-    <!-- 已登录状态 -->
-    <div v-else class="flex items-center gap-4 text-white">
-      <div class="bg-white/30 w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-sm overflow-hidden">
-        <img v-if="avatar && avatar.trim() !== ''" :src="avatar" alt="用户头像" class="w-full h-full object-cover" />
-        <img v-else src="../assets/avatar.png" alt="用户头像" class="w-full h-full object-cover" />
-      </div>
-      <div class="flex-1">
-        <div class="text-base font-semibold">{{ username }}</div>
-      </div>
-      <button
-        @click="handleLogout"
-        :disabled="isUploading || isSaving"
-        :class="[
-          'px-5 py-2 border-2 rounded-lg text-sm font-medium transition-all duration-300',
-          isUploading || isSaving
-            ? 'bg-white/10 text-white/50 border-white/30 cursor-not-allowed'
-            : 'bg-white/20 text-white border-white hover:bg-white hover:text-teal-600'
-        ]"
-      >
-        登出
-      </button>
-    </div>
+  <div>
   </div>
 </template>
 
 <script setup>
-import { useAuth } from '../composables/useAuth'
-
-const props = defineProps({
-  isLoggedIn: {
-    type: Boolean,
-    default: false
-  },
-  username: {
-    type: String,
-    default: ''
-  },
-  isUploading: {
-    type: Boolean,
-    default: false
-  },
-  isSaving: {
-    type: Boolean,
-    default: false
-  }
-})
-
-const emit = defineEmits(['logout'])
-
-const { avatar } = useAuth()
-
-const handleLogout = () => {
-  if (!props.isUploading && !props.isSaving) {
-    emit('logout')
-  }
-}
 </script>
+
+<style scoped>
+</style>

@@ -60,7 +60,7 @@ const ERROR_MESSAGES = {
   [ERROR_TYPES.NETWORK_ERROR]: '网络连接失败，请检查网络设置后重试',
   [ERROR_TYPES.TIMEOUT_ERROR]: '请求超时，请稍后重试',
   [ERROR_TYPES.RESOURCE_NOT_FOUND]: '未找到相关资源',
-  [ERROR_TYPES.VALIDATION_ERROR]: '输入参数验证失败',
+  [ERROR_TYPES.VALIDATION_ERROR]: '输入参数验证失败，请检查您的输入后重试',
   [ERROR_TYPES.SYSTEM_ERROR]: '系统内部错误，请稍后重试',
   [ERROR_TYPES.UNKNOWN_ERROR]: '未知错误，请稍后重试'
 }
@@ -119,7 +119,7 @@ export const createErrorFromResponse = (response, errorData = null) => {
       break
     case 422:
       type = ERROR_TYPES.VALIDATION_ERROR
-      message = errorData?.message || '数据验证失败'
+      message = errorData?.message || '数据验证失败，请检查您的输入后重试'
       break
     case 500:
       type = ERROR_TYPES.SYSTEM_ERROR
@@ -165,10 +165,37 @@ export const logError = (error, context = 'Unknown context') => {
     stack: error.stack,
     type: error.type || ERROR_TYPES.UNKNOWN_ERROR,
     code: error.code || null,
-    details: error.details || null
+    details: error.details || null,
+    memory: typeof process !== 'undefined' && process.memoryUsage ? process.memoryUsage() : null,
+    environment: {
+      navigator: typeof navigator !== 'undefined' ? {
+        userAgent: navigator.userAgent,
+        platform: navigator.platform
+      } : null,
+      location: typeof location !== 'undefined' ? {
+        href: location.href,
+        pathname: location.pathname,
+        search: location.search
+      } : null
+    }
   }
   
-  console.error('Error:', errorInfo)
+  console.error('=== 错误日志 ===')
+  console.error('时间戳:', errorInfo.timestamp)
+  console.error('上下文:', errorInfo.context)
+  console.error('错误名称:', errorInfo.name)
+  console.error('错误消息:', errorInfo.message)
+  console.error('错误类型:', errorInfo.type)
+  console.error('错误代码:', errorInfo.code)
+  console.error('错误详情:', errorInfo.details)
+  console.error('错误堆栈:', errorInfo.stack)
+  if (errorInfo.memory) {
+    console.error('内存使用:', errorInfo.memory)
+  }
+  if (errorInfo.environment) {
+    console.error('环境信息:', errorInfo.environment)
+  }
+  console.error('================')
   
   // 这里可以添加错误日志上报逻辑
   // 例如：上报到监控系统、日志服务等

@@ -11,6 +11,7 @@
 import { BASE_URL } from '../config'
 import { getToken } from './auth'
 import { handleError, createErrorFromResponse, createErrorFromNetwork } from './errorHandler'
+import logger from './logger'
 
 // 缓存对象
 const cache = new Map()
@@ -40,6 +41,23 @@ const isCacheValid = (cachedData) => {
   const { timestamp, data } = cachedData
   const now = Date.now()
   return now - timestamp < CACHE_EXPIRY && data !== undefined
+}
+
+// 清理过期缓存
+const cleanupExpiredCache = () => {
+  const now = Date.now()
+  let removedCount = 0
+  
+  for (const [key, cachedData] of cache.entries()) {
+    if (!isCacheValid(cachedData)) {
+      cache.delete(key)
+      removedCount++
+    }
+  }
+  
+  if (removedCount > 0) {
+    console.log(`清理了 ${removedCount} 个过期缓存项`)
+  }
 }
 
 // 获取认证令牌
@@ -79,19 +97,9 @@ const handleResponse = async (response) => {
     // 尝试解析错误响应
     try {
       const errorData = await response.json()
-      // 特殊处理 HTTP 422 错误
-      if (response.status === 422) {
-        errorData.message = '视频正在合成中'
-      }
       const error = createErrorFromResponse(response, errorData)
       throw error
     } catch (e) {
-      // 特殊处理 HTTP 422 错误
-      if (response.status === 422) {
-        const errorData = { message: '视频正在合成中' }
-        const error = createErrorFromResponse(response, errorData)
-        throw error
-      }
       const error = createErrorFromResponse(response)
       throw error
     }
@@ -118,22 +126,32 @@ const handleResponse = async (response) => {
 // 重试机制
 const retryRequest = async (url, options, attempt = 1) => {
   try {
-    console.log(`API 请求 (${attempt}/${RETRY_CONFIG.maxAttempts}): ${url}`)
+    logger.apiRequest(options.method || 'GET', url, options.body ? JSON.parse(options.body) : null, options.headers);
+    logger.info(`API 请求尝试 (${attempt}/${RETRY_CONFIG.maxAttempts})`, { timeout: options.timeout || 30000 });
     
     // 添加请求超时处理
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), options.timeout || 30000)
     
+    const startTime = Date.now()
     const response = await fetch(url, {
       ...options,
       signal: controller.signal
     })
+    const endTime = Date.now()
+    const responseTime = endTime - startTime
     
     clearTimeout(timeoutId)
-    console.log(`API 响应状态: ${response.status}`)
+    
+    logger.apiResponse(response.status, response.statusText, url, responseTime);
+    
     return await handleResponse(response)
   } catch (error) {
-    console.error(`API 请求失败 (${attempt}/${RETRY_CONFIG.maxAttempts}):`, error)
+    logger.error(`API 请求失败 (${attempt}/${RETRY_CONFIG.maxAttempts})`, {
+      url,
+      error: error.message,
+      stack: error.stack
+    });
     
     // 处理错误
     const handledError = handleError(error, `API 请求: ${url}`)
@@ -142,7 +160,7 @@ const retryRequest = async (url, options, attempt = 1) => {
     if (attempt < RETRY_CONFIG.maxAttempts && 
         (handledError.type === 'network_error' || handledError.type === 'timeout_error' || handledError.type === 'system_error' || handledError.status >= 500)) {
       const delay = RETRY_CONFIG.delay * Math.pow(RETRY_CONFIG.backoff, attempt - 1)
-      console.log(`正在重试 (${attempt}/${RETRY_CONFIG.maxAttempts})，延迟 ${delay}ms...`)
+      logger.info(`正在重试 API 请求 (${attempt}/${RETRY_CONFIG.maxAttempts})，延迟 ${delay}ms...`, { url });
       await new Promise(resolve => setTimeout(resolve, delay))
       return retryRequest(url, options, attempt + 1)
     }
@@ -150,12 +168,24 @@ const retryRequest = async (url, options, attempt = 1) => {
   }
 }
 
+// 检查API端点是否存在
+const validateEndpoint = (endpoint) => {
+  if (!endpoint) {
+    throw new Error('API端点未定义，请检查配置文件');
+  }
+  return endpoint;
+};
+
 // API 请求封装
 const api = {
   // GET 请求
   get: async (endpoint, options = {}) => {
-    const url = `${BASE_URL}${endpoint}`
+    const validatedEndpoint = validateEndpoint(endpoint)
+    const url = `${BASE_URL}${validatedEndpoint}`
     const cacheKey = generateCacheKey(url, options)
+    
+    // 清理过期缓存
+    cleanupExpiredCache()
     
     // 检查缓存
     const cachedData = cache.get(cacheKey)
@@ -188,7 +218,8 @@ const api = {
 
   // POST 请求
   post: async (endpoint, data = {}, options = {}) => {
-    const url = `${BASE_URL}${endpoint}`
+    const validatedEndpoint = validateEndpoint(endpoint)
+    const url = `${BASE_URL}${validatedEndpoint}`
 
     const requestOptions = buildRequestOptions({
       ...options,
@@ -201,7 +232,8 @@ const api = {
 
   // PUT 请求
   put: async (endpoint, data = {}, options = {}) => {
-    const url = `${BASE_URL}${endpoint}`
+    const validatedEndpoint = validateEndpoint(endpoint)
+    const url = `${BASE_URL}${validatedEndpoint}`
 
     const requestOptions = buildRequestOptions({
       ...options,
@@ -214,7 +246,8 @@ const api = {
 
   // DELETE 请求
   delete: async (endpoint, options = {}) => {
-    const url = `${BASE_URL}${endpoint}`
+    const validatedEndpoint = validateEndpoint(endpoint)
+    const url = `${BASE_URL}${validatedEndpoint}`
 
     const requestOptions = buildRequestOptions({
       ...options,

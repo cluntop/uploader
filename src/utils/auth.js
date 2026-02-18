@@ -1,4 +1,4 @@
-/* 
+/**
  * @Author: flkGit
  * @Date: 2026-02-18 10:00:00
  * @LastEditors: flkGit
@@ -8,6 +8,8 @@
  *
  * Copyright (c) 2026 by flkGit, All Rights Reserved.
  */
+
+import logger from './logger'
 
 // 认证相关常量
 const AUTH_CONSTANTS = {
@@ -52,9 +54,15 @@ export const setToken = (token, refreshToken = null, expiry = null) => {
     
     sessionStorage.setItem(AUTH_CONSTANTS.AUTH_STATUS_KEY, 'true')
     
-    console.log('Token保存成功')
+    logger.success('Token保存成功', {
+      hasRefreshToken: !!refreshToken,
+      hasExpiry: !!expiry
+    })
   } catch (error) {
-    console.error('保存token失败:', error)
+    logger.error('保存token失败', {
+      error: error.message,
+      stack: error.stack
+    })
   }
 }
 
@@ -72,14 +80,17 @@ export const getToken = () => {
     
     // 验证token是否过期
     if (isTokenExpired()) {
-      console.warn('token已过期')
+      logger.warn('token已过期')
       removeToken()
       return null
     }
     
     return token
   } catch (error) {
-    console.error('获取token失败:', error)
+    logger.error('获取token失败', {
+      error: error.message,
+      stack: error.stack
+    })
     return null
   }
 }
@@ -92,7 +103,10 @@ export const getRefreshToken = () => {
   try {
     return sessionStorage.getItem(AUTH_CONSTANTS.REFRESH_TOKEN_KEY)
   } catch (error) {
-    console.error('获取刷新token失败:', error)
+    logger.error('获取刷新token失败', {
+      error: error.message,
+      stack: error.stack
+    })
     return null
   }
 }
@@ -110,9 +124,21 @@ export const isTokenExpired = () => {
     }
     
     const expiryTime = parseInt(expiry)
-    return Date.now() > expiryTime
+    const isExpired = Date.now() > expiryTime
+    
+    if (isExpired) {
+      logger.debug('Token已过期', {
+        expiryTime: new Date(expiryTime).toISOString(),
+        currentTime: new Date().toISOString()
+      })
+    }
+    
+    return isExpired
   } catch (error) {
-    console.error('检查token过期状态失败:', error)
+    logger.error('检查token过期状态失败', {
+      error: error.message,
+      stack: error.stack
+    })
     return false
   }
 }
@@ -127,9 +153,12 @@ export const removeToken = () => {
     sessionStorage.removeItem(AUTH_CONSTANTS.TOKEN_EXPIRY_KEY)
     sessionStorage.removeItem(AUTH_CONSTANTS.AUTH_STATUS_KEY)
     
-    console.log('Token已移除')
+    logger.info('Token已移除')
   } catch (error) {
-    console.error('移除token失败:', error)
+    logger.error('移除token失败', {
+      error: error.message,
+      stack: error.stack
+    })
   }
 }
 
@@ -141,10 +170,20 @@ export const isAuthenticated = () => {
   try {
     const token = getToken()
     const authStatus = sessionStorage.getItem(AUTH_CONSTANTS.AUTH_STATUS_KEY)
+    const isAuth = !!token && authStatus === 'true'
     
-    return !!token && authStatus === 'true'
+    logger.debug('检查认证状态', {
+      isAuthenticated: isAuth,
+      hasToken: !!token,
+      authStatus
+    })
+    
+    return isAuth
   } catch (error) {
-    console.error('检查认证状态失败:', error)
+    logger.error('检查认证状态失败', {
+      error: error.message,
+      stack: error.stack
+    })
     return false
   }
 }
@@ -159,14 +198,21 @@ export const getAuthStatus = () => {
     const isAuth = isAuthenticated()
     const isExpired = isTokenExpired()
     
-    return {
+    const authStatus = {
       isAuthenticated: isAuth,
       hasToken: !!token,
       isTokenExpired: isExpired,
       token: token
     }
+    
+    logger.debug('获取认证状态信息', authStatus)
+    
+    return authStatus
   } catch (error) {
-    console.error('获取认证状态信息失败:', error)
+    logger.error('获取认证状态信息失败', {
+      error: error.message,
+      stack: error.stack
+    })
     return {
       isAuthenticated: false,
       hasToken: false,
@@ -185,16 +231,19 @@ export const refreshToken = async () => {
     const refreshToken = getRefreshToken()
     
     if (!refreshToken) {
-      console.warn('没有刷新token')
+      logger.warn('没有刷新token')
       return false
     }
     
     // 这里应该调用API刷新token
     // 暂时返回false，需要根据实际API实现
-    console.log('尝试刷新token')
+    logger.info('尝试刷新token')
     return false
   } catch (error) {
-    console.error('刷新token失败:', error)
+    logger.error('刷新token失败', {
+      error: error.message,
+      stack: error.stack
+    })
     return false
   }
 }
@@ -211,10 +260,16 @@ export const generateUUID = () => {
       return v.toString(16)
     })
     sessionStorage.setItem(AUTH_CONSTANTS.AUTH_UUID_KEY, uuid)
+    logger.debug('生成UUID成功', { uuid })
     return uuid
   } catch (error) {
-    console.error('生成UUID失败:', error)
-    return Date.now().toString()
+    logger.error('生成UUID失败', {
+      error: error.message,
+      stack: error.stack
+    })
+    const fallbackId = Date.now().toString()
+    logger.warn('使用时间戳作为UUID的 fallback', { fallbackId })
+    return fallbackId
   }
 }
 
@@ -243,9 +298,17 @@ export const setUserInfo = (userInfo) => {
       setToken(token)
     }
     
-    console.log('用户信息保存成功:', userInfo)
+    logger.success('用户信息保存成功', {
+      userId: user_id,
+      username: username,
+      hasAvatar: !!avatar,
+      hasToken: !!token
+    })
   } catch (error) {
-    console.error('保存用户信息失败:', error)
+    logger.error('保存用户信息失败', {
+      error: error.message,
+      stack: error.stack
+    })
   }
 }
 
@@ -259,9 +322,17 @@ export const getUserInfo = () => {
     if (!userInfo) {
       return null
     }
-    return JSON.parse(userInfo)
+    const parsedUserInfo = JSON.parse(userInfo)
+    logger.debug('获取用户信息成功', {
+      userId: parsedUserInfo.user_id,
+      username: parsedUserInfo.username
+    })
+    return parsedUserInfo
   } catch (error) {
-    console.error('获取用户信息失败:', error)
+    logger.error('获取用户信息失败', {
+      error: error.message,
+      stack: error.stack
+    })
     return null
   }
 }
@@ -279,10 +350,18 @@ export const buildAuthUrl = () => {
       url: APP_CONFIG.CALLBACK_URL
     })
     const authUrl = `${APP_CONFIG.AUTH_BASE_URL}?${params.toString()}`
-    console.log('构建授权URL:', authUrl)
+    logger.info('构建授权URL成功', {
+      authUrl,
+      appName: APP_CONFIG.APP_NAME,
+      callbackUrl: APP_CONFIG.CALLBACK_URL,
+      uuid
+    })
     return authUrl
   } catch (error) {
-    console.error('构建授权URL失败:', error)
+    logger.error('构建授权URL失败', {
+      error: error.message,
+      stack: error.stack
+    })
     return APP_CONFIG.AUTH_BASE_URL
   }
 }
@@ -294,28 +373,63 @@ export const buildAuthUrl = () => {
  */
 export const handleCallback = (params) => {
   try {
-    const { user_id, username, avatar, token } = params
-    
-    // 验证参数完整性
-    if (!user_id || !token) {
-      console.error('回调参数不完整:', params)
+    // 验证参数对象是否存在
+    if (!params || typeof params !== 'object') {
+      logger.error('回调参数格式错误', {
+        params: params
+      })
       return null
     }
     
+    // 获取并验证所有必需参数
+    const user_id = params.user_id
+    const username = params.username
+    const avatar = params.avatar
+    const token = params.token
+    
+    // 验证参数完整性
+    if (!user_id || !token) {
+      logger.error('回调参数不完整，缺少必需参数', {
+        params: {
+          hasUserId: !!user_id,
+          hasUsername: !!username,
+          hasAvatar: !!avatar,
+          hasToken: !!token
+        }
+      })
+      return null
+    }
+    
+    // 对参数进行安全性验证，防止恶意数据注入
+    const validateParam = (param) => {
+      if (typeof param === 'string') {
+        // 移除可能的恶意脚本和HTML标签
+        return param.replace(/<script[^>]*>.*?<\/script>/gi, '').replace(/<[^>]*>/g, '')
+      }
+      return param
+    }
+    
     const userInfo = {
-      user_id,
-      username: username || '',
-      avatar: avatar || '',
-      token
+      user_id: validateParam(user_id),
+      username: validateParam(username || ''),
+      avatar: validateParam(avatar || ''),
+      token: validateParam(token)
     }
     
     // 保存用户信息
     setUserInfo(userInfo)
     
-    console.log('回调处理成功:', userInfo)
+    logger.success('回调处理成功', {
+      userId: userInfo.user_id,
+      username: userInfo.username,
+      hasAvatar: !!userInfo.avatar
+    })
     return userInfo
   } catch (error) {
-    console.error('处理回调失败:', error)
+    logger.error('处理回调失败', {
+      error: error.message,
+      stack: error.stack
+    })
     return null
   }
 }
@@ -328,9 +442,20 @@ export const checkAuthStatus = () => {
   try {
     const userInfo = getUserInfo()
     const token = getToken()
-    return !!userInfo && !!token
+    const isAuth = !!userInfo && !!token
+    
+    logger.debug('检查授权状态', {
+      isAuthorized: isAuth,
+      hasUserInfo: !!userInfo,
+      hasToken: !!token
+    })
+    
+    return isAuth
   } catch (error) {
-    console.error('检查授权状态失败:', error)
+    logger.error('检查授权状态失败', {
+      error: error.message,
+      stack: error.stack
+    })
     return false
   }
 }
@@ -349,9 +474,12 @@ export const clearAuthInfo = () => {
     sessionStorage.removeItem(AUTH_CONSTANTS.ORIGINAL_URL_EXPIRY_KEY)
     removeToken()
     
-    console.log('认证信息已清除')
+    logger.info('认证信息已清除')
   } catch (error) {
-    console.error('清除认证信息失败:', error)
+    logger.error('清除认证信息失败', {
+      error: error.message,
+      stack: error.stack
+    })
   }
 }
 
@@ -370,9 +498,16 @@ export const saveOriginalUrl = (url, expiry = 30 * 60 * 1000) => {
     sessionStorage.setItem(AUTH_CONSTANTS.ORIGINAL_URL_KEY, url)
     sessionStorage.setItem(AUTH_CONSTANTS.ORIGINAL_URL_EXPIRY_KEY, expiryTime.toString())
     
-    console.log('原始链接保存成功:', url)
+    logger.info('原始链接保存成功', {
+      url,
+      expiry: expiryTime,
+      expiryFormatted: new Date(expiryTime).toISOString()
+    })
   } catch (error) {
-    console.error('保存原始链接失败:', error)
+    logger.error('保存原始链接失败', {
+      error: error.message,
+      stack: error.stack
+    })
   }
 }
 
@@ -393,15 +528,22 @@ export const getOriginalUrl = () => {
     if (expiry) {
       const expiryTime = parseInt(expiry)
       if (Date.now() > expiryTime) {
-        console.warn('原始链接已过期')
+        logger.warn('原始链接已过期', {
+          expiryTime: new Date(expiryTime).toISOString(),
+          currentTime: new Date().toISOString()
+        })
         clearOriginalUrl()
         return null
       }
     }
     
+    logger.debug('获取原始链接成功', { url })
     return url
   } catch (error) {
-    console.error('获取原始链接失败:', error)
+    logger.error('获取原始链接失败', {
+      error: error.message,
+      stack: error.stack
+    })
     return null
   }
 }
@@ -414,9 +556,12 @@ export const clearOriginalUrl = () => {
     sessionStorage.removeItem(AUTH_CONSTANTS.ORIGINAL_URL_KEY)
     sessionStorage.removeItem(AUTH_CONSTANTS.ORIGINAL_URL_EXPIRY_KEY)
     
-    console.log('原始链接已清除')
+    logger.info('原始链接已清除')
   } catch (error) {
-    console.error('清除原始链接失败:', error)
+    logger.error('清除原始链接失败', {
+      error: error.message,
+      stack: error.stack
+    })
   }
 }
 
@@ -434,7 +579,7 @@ export const handleCallbackWithRedirect = (params) => {
       const originalUrl = getOriginalUrl()
       
       if (originalUrl) {
-        console.log('重定向回原始链接:', originalUrl)
+        logger.info('重定向回原始链接', { originalUrl })
         clearOriginalUrl()
         window.location.href = originalUrl
       }
@@ -442,7 +587,10 @@ export const handleCallbackWithRedirect = (params) => {
     
     return userInfo
   } catch (error) {
-    console.error('处理回调并重定向失败:', error)
+    logger.error('处理回调并重定向失败', {
+      error: error.message,
+      stack: error.stack
+    })
     return null
   }
 }
