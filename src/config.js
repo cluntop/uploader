@@ -59,7 +59,7 @@ export const RETRY_CONFIG = {
 // 网络配置
 export const NETWORK_CONFIG = {
   // 上传并发数
-  CONCURRENT_UPLOADS: 3,
+  CONCURRENT_UPLOADS: 5,
   // 连接超时（毫秒）
   CONNECTION_TIMEOUT: 10 * 1000
 }
