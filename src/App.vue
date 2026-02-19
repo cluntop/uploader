@@ -11,8 +11,8 @@
       <div class="flex justify-between items-center mb-8">
         <div>
           <h1 class="text-gray-800 mb-2 text-2xl font-bold">
-            EMOS emby公益服 视频上传服务
-            <small class="text-gray-400">v0.0.1</small>
+            EMOS 视频上传服务
+            <small class="text-gray-400">v1.0.1</small>
           </h1>
           <p class="text-gray-600 text-sm">支持上传到 Microsoft OneDrive</p>
         </div>
